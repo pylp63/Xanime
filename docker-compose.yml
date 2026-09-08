@@ -1,0 +1,28 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      network: host
+    container_name: xanime-app
+    ports:
+      - "${API_PORT:-8080}:8080"
+    environment:
+      - DB_DRIVER=sqlite3
+      - DB_PATH=/app/data/xanime.db
+      - VIDEO_PATH=/app/videos
+      - STATIC_PATH=/app/static
+      - DIST_PATH=/app/dist
+      - ADMIN_USER=${ADMIN_USER:-admin}
+      - ADMIN_PASS=${ADMIN_PASS:-admin}
+      - JWT_SECRET=${JWT_SECRET:-dev-secret}
+      - PORT=8080
+      - GIN_MODE=${GIN_MODE:-release}
+    volumes:
+      - xanime_data:/app/data
+      - ${VIDEO_PATH:-./videos}:/app/videos
+      - ${STATIC_PATH:-./static}:/app/static
+    restart: unless-stopped
+
+volumes:
+  xanime_data:

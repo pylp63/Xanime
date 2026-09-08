@@ -1,0 +1,63 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout>
+  <div class="min-h-[80vh] flex items-center justify-center animate-fade-in relative overflow-hidden">
+    <!-- Decorative aurora blobs -->
+    <div class="aurora-blob w-96 h-96 -left-24 -top-24" style="background: rgba(124,58,237,0.4)"></div>
+    <div class="aurora-blob w-80 h-80 -right-16 bottom-0" style="background: rgba(59,130,246,0.3); animation-delay: -7s"></div>
+
+    <div class="glass rounded-3xl p-8 w-full max-w-sm relative z-10">
+      <div class="text-center mb-6">
+        <h1 class="text-2xl font-bold mb-1">登录</h1>
+        <p class="text-text-muted text-sm">欢迎回来，继续探索</p>
+      </div>
+
+      <form id="loginForm" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium mb-1.5">用户名</label>
+          <input id="username" type="text" required class="glass-input" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1.5">密码</label>
+          <input id="password" type="password" required class="glass-input" />
+        </div>
+        <div id="error" class="hidden text-sm px-4 py-2.5 rounded-xl text-rose-300 bg-rose-400/10 border border-rose-400/30"></div>
+        <button type="submit" class="btn-liquid w-full">
+          <span class="relative z-10">登录</span>
+        </button>
+      </form>
+    </div>
+  </div>
+</BaseLayout>
+
+<script>
+  const form = document.getElementById('loginForm');
+  const errorEl = document.getElementById('error');
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const username = (document.getElementById('username') as HTMLInputElement).value;
+    const password = (document.getElementById('password') as HTMLInputElement).value;
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        errorEl!.textContent = err.error || '登录失败';
+        errorEl!.classList.remove('hidden');
+        return;
+      }
+      const data = await res.json();
+      localStorage.setItem('token', data.token);
+      window.location.href = '/';
+    } catch {
+      errorEl!.textContent = '网络错误';
+      errorEl!.classList.remove('hidden');
+    }
+  });
+</script>

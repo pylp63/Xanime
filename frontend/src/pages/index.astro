@@ -1,0 +1,153 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const categories = ["全部", "动作", "冒险", "奇幻", "科幻", "喜剧", "日常", "悬疑", "推理", "黑暗"];
+const search = Astro.url.searchParams.get('search') || '';
+const activeCategory = Astro.url.searchParams.get('category') || '';
+---
+
+<BaseLayout>
+  <div class="min-h-screen">
+    <!-- Navbar -->
+    <nav class="sticky top-0 z-50 glass-nav">
+      <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+        <a href="/" class="flex items-center gap-2">
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+            <rect width="32" height="32" rx="10" fill="url(#logoGrad)" />
+            <defs>
+              <linearGradient id="logoGrad" x1="0" y1="0" x2="32" y2="32">
+                <stop offset="0%" stop-color="#a78bfa" />
+                <stop offset="100%" stop-color="#6d28d9" />
+              </linearGradient>
+            </defs>
+            <text x="16" y="21" text-anchor="middle" fill="white" font-size="16" font-weight="bold">X</text>
+          </svg>
+          <span class="text-xl font-bold bg-gradient-to-r from-primary-light to-primary bg-clip-text text-transparent">
+            X动漫
+          </span>
+        </a>
+        <form action="/" method="GET" class="flex-1 max-w-md mx-6">
+          <div class="relative">
+            <input
+              type="text" name="search" placeholder="搜索X动漫…" value={search}
+              class="glass-input !py-2 text-sm"
+            />
+            <button type="submit" class="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-primary-light">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            </button>
+          </div>
+        </form>
+        <div id="nav-auth" class="flex items-center gap-3">
+          <a href="/login/" class="btn-liquid text-sm">登录</a>
+        </div>
+      </div>
+    </nav>
+
+    <div id="app">
+      <main class="max-w-7xl mx-auto px-4 py-8 animate-fade-in">
+        {!search && (
+          <div class="mb-10 text-center">
+            <h1 class="text-3xl md:text-4xl font-bold mb-3">探索新世界 • <span class="bg-gradient-to-r from-primary-light to-primary bg-clip-text text-transparent">X动漫</span></h1>
+            <p class="text-text-muted max-w-xl mx-auto">海量影片资源 · 流畅播放体验</p>
+          </div>
+        )}
+        {search && (
+          <div class="mb-6">
+            <h2 class="text-lg">搜索结果：<span class="text-primary-light">"{search}"</span><span class="text-text-muted ml-2 text-sm" id="result-count"></span></h2>
+          </div>
+        )}
+        <div class="flex flex-wrap gap-2 mb-8">
+          {categories.map(cat => {
+            const isActive = (cat === "全部" && !search && !activeCategory) || cat === activeCategory;
+            const params = new URLSearchParams();
+            if (search) params.set('search', search);
+            if (cat !== "全部") params.set('category', cat);
+            const qs = params.toString();
+            const href = qs ? `/?${qs}` : '/';
+            return <a href={href} class={`filter-pill ${isActive ? 'active' : ''}`}>{cat}</a>;
+          })}
+        </div>
+        <div id="grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          <div class="col-span-full text-center py-20 text-text-muted text-lg">加载中…</div>
+        </div>
+      </main>
+    </div>
+
+    <footer class="text-center text-text-muted text-sm py-8 mt-16">
+      X动漫 &copy; {new Date().getFullYear()} &mdash; Built with Astro + Go
+    </footer>
+  </div>
+</BaseLayout>
+
+<script>
+  (function () {
+    const grid = document.getElementById('grid');
+    const countEl = document.getElementById('result-count');
+    const q = new URLSearchParams(window.location.search);
+
+    function coverUrl(cover) {
+      if (!cover || !cover.trim()) {
+        return 'https://via.placeholder.com/480x640/141428/8b5cf6?text=Xanime';
+      }
+      if (/^https?:/.test(cover)) return cover;
+      if (cover.charAt(0) === '/') return cover;
+      return '/static/' + cover;
+    }
+
+    async function load() {
+      const params = new URLSearchParams();
+      params.set('page', '1');
+      params.set('size', '24');
+      const s = q.get('search');
+      const c = q.get('category');
+      params.set('search', s || '');
+      params.set('category', c || '');
+
+      let res;
+      try {
+        res = await fetch('/api/xanimes?' + params, { credentials: 'same-origin' });
+      } catch (e) {
+        grid.innerHTML = '<div class="col-span-full text-center py-20 text-text-muted text-lg">无法连接服务器</div>';
+        return;
+      }
+
+      if (res.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
+      if (!res.ok) {
+        grid.innerHTML = '<div class="col-span-full text-center py-20 text-text-muted text-lg">加载失败，请刷新重试</div>';
+        return;
+      }
+
+      const data = await res.json();
+      const list = data.data || [];
+      if (countEl) countEl.textContent = '(' + (data.total || list.length) + ' 部)';
+
+      if (list.length === 0) {
+        grid.innerHTML = '<div class="col-span-full text-center py-20"><p class="text-text-muted text-lg">暂无影片资源</p><p class="text-text-muted text-sm mt-2">请稍后再来探索</p></div>';
+        return;
+      }
+
+      grid.innerHTML = list.map(function (a) {
+        return '<a href="/xanime/' + a.id + '/" class="xanime-card block group">' +
+          '<div class="relative aspect-[3/4] overflow-hidden">' +
+            '<img src="' + coverUrl(a.cover) + '" alt="' + a.title + '" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />' +
+            (a.rating > 0 ? '<div class="glass-chip-accent absolute top-2 right-2 text-xs font-bold px-2 py-1 rounded-lg">★ ' + a.rating.toFixed(1) + '</div>' : '') +
+            '<div class="glass-chip absolute bottom-2 left-2 text-xs px-2 py-1 rounded-lg">' + a.episodes + ' 话</div>' +
+          '</div>' +
+          '<div class="p-3">' +
+            '<h3 class="font-semibold text-sm leading-tight line-clamp-1">' + a.title + '</h3>' +
+            '<div class="flex items-center gap-2 mt-1.5">' +
+              '<span class="text-xs text-text-muted">' + a.year + '</span>' +
+              '<span class="w-1 h-1 bg-text-muted rounded-full"></span>' +
+              '<span class="text-xs px-1.5 py-0.5 rounded-lg bg-white/5 text-primary-light border border-white/10">' + a.category + '</span>' +
+            '</div>' +
+          '</div>' +
+        '</a>';
+      }).join('');
+    }
+
+    load();
+  })();
+</script>

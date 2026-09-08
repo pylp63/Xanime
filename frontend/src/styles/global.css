@@ -1,0 +1,339 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   X动漫 — 液态玻璃 (Liquid Glass) 设计系统
+   Dark aurora canvas + frosted glass surfaces with specular highlights.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --glass-bg: rgba(255, 255, 255, 0.06);
+  --glass-bg-strong: rgba(255, 255, 255, 0.09);
+  --glass-bg-subtle: rgba(255, 255, 255, 0.04);
+  --glass-border: rgba(255, 255, 255, 0.14);
+  --glass-border-strong: rgba(255, 255, 255, 0.22);
+  --glass-highlight: rgba(255, 255, 255, 0.5);
+  --accent: #8b5cf6;
+  --accent-light: #a78bfa;
+  --accent-glow: rgba(139, 92, 246, 0.45);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  color: #eef2ff;
+  font-family: "Inter", "Noto Sans SC", system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+  background-color: #07070f;
+  /* Aurora canvas — fixed so it never scrolls with content */
+  background-image:
+    radial-gradient(ellipse 80% 50% at 10% -10%, rgba(124, 58, 237, 0.28), transparent 60%),
+    radial-gradient(ellipse 60% 45% at 95% 5%, rgba(59, 130, 246, 0.20), transparent 60%),
+    radial-gradient(ellipse 55% 40% at 85% 95%, rgba(236, 72, 153, 0.14), transparent 60%),
+    radial-gradient(ellipse 50% 40% at 5% 90%, rgba(45, 212, 191, 0.10), transparent 60%);
+  background-attachment: fixed;
+}
+
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.25); }
+
+/* ─── Glass surface primitives ──────────────────────────────────────────── */
+
+.glass {
+  position: relative;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  backdrop-filter: blur(22px) saturate(160%);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 var(--glass-highlight);
+  overflow: hidden;
+}
+
+/* Liquid specular streak on top edge — the signature liquid-glass highlight */
+.glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.10) 45%, rgba(255, 255, 255, 0.18) 50%, rgba(255, 255, 255, 0.10) 55%, transparent 60%);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+/* Glass input fields */
+.glass-input {
+  width: 100%;
+  background: var(--glass-bg-subtle);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  padding: 0.65rem 1rem;
+  color: #eef2ff;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+.glass-input::placeholder { color: rgba(238, 242, 255, 0.35); }
+.glass-input:focus {
+  border-color: rgba(167, 139, 250, 0.55);
+  background: var(--glass-bg);
+  box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.15);
+}
+.glass-input option {
+  color: #0f172a;
+  background: #ffffff;
+}
+
+/* Glass select fields */
+select.glass-input option { color: #0f172a; }
+
+/* Primary CTA — liquid pill with gradient glow */
+.btn-liquid {
+  position: relative;
+  background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #fff;
+  border-radius: 14px;
+  padding: 0.65rem 1.5rem;
+  font-weight: 600;
+  transition: transform 0.15s ease, box-shadow 0.25s ease, filter 0.2s ease;
+  box-shadow:
+    0 4px 20px var(--accent-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  overflow: hidden;
+}
+.btn-liquid::after {
+  content: "";
+  position: absolute;
+  top: 0; left: -60%;
+  width: 40%; height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  transform: skewX(-20deg);
+  animation: liquidSheen 3.2s ease-in-out infinite;
+}
+@keyframes liquidSheen {
+  0%   { left: -60%; }
+  55%  { left: 130%; }
+  100% { left: 130%; }
+}
+.btn-liquid:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.1);
+  box-shadow: 0 6px 28px var(--accent-glow), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.btn-liquid:active { transform: translateY(0); }
+.btn-liquid:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+
+/* Secondary (ghost glass) button */
+.btn-glass {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--glass-border);
+  color: #eef2ff;
+  border-radius: 14px;
+  padding: 0.55rem 1.25rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+.btn-glass:hover {
+  background: var(--glass-bg-strong);
+  border-color: var(--glass-border-strong);
+}
+
+/* Danger glass button */
+.btn-danger {
+  background: rgba(244, 63, 94, 0.15);
+  border: 1px solid rgba(244, 63, 94, 0.35);
+  color: #fda4af;
+  border-radius: 14px;
+  padding: 0.55rem 1.25rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+.btn-danger:hover {
+  background: rgba(244, 63, 94, 0.28);
+  color: #fff;
+}
+
+/* ─── Component glass ───────────────────────────────────────────────────── */
+
+/* Floating glass navbar */
+.glass-nav {
+  background: rgba(10, 10, 24, 0.55);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  backdrop-filter: blur(28px) saturate(180%);
+  border-bottom: 1px solid var(--glass-border);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.25), inset 0 1px 0 var(--glass-highlight);
+}
+
+/* Anime card — liquid glass slab */
+.xanime-card {
+  position: relative;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  backdrop-filter: blur(16px) saturate(150%);
+  border: 1px solid var(--glass-border);
+  border-radius: 18px;
+  overflow: hidden;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s ease, border-color 0.35s ease;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3), inset 0 1px 0 var(--glass-highlight);
+}
+.xanime-card:hover {
+  transform: translateY(-6px);
+  border-color: var(--glass-border-strong);
+  box-shadow:
+    0 18px 48px rgba(0, 0, 0, 0.45),
+    0 0 32px var(--accent-glow),
+    inset 0 1px 0 var(--glass-highlight);
+}
+.xanime-card:hover::before { opacity: 1; }
+
+/* Rating / episode badges — mini glass chips */
+.glass-chip {
+  background: rgba(0, 0, 0, 0.45);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  color: #fff;
+}
+.glass-chip-accent {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.85), rgba(109, 40, 217, 0.85));
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+  box-shadow: 0 2px 12px var(--accent-glow);
+}
+
+/* Category filter pills */
+.filter-pill {
+  background: var(--glass-bg-subtle);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid transparent;
+  color: rgba(238, 242, 255, 0.65);
+  border-radius: 999px;
+  padding: 0.45rem 1.1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.25s ease;
+}
+.filter-pill:hover {
+  background: var(--glass-bg);
+  border-color: var(--glass-border);
+  color: #fff;
+}
+.filter-pill.active {
+  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #fff;
+  box-shadow: 0 2px 16px var(--accent-glow);
+}
+
+/* Episode number buttons */
+.episode-btn {
+  transition: all 0.2s ease;
+  background: var(--glass-bg-subtle);
+  border: 1px solid var(--glass-border);
+  color: #eef2ff;
+  border-radius: 12px;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+.episode-btn:hover {
+  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+  color: white;
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 16px var(--accent-glow);
+}
+.episode-btn.active {
+  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+  color: white;
+  font-weight: 600;
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 16px var(--accent-glow);
+}
+
+/* Video player frame */
+.video-container {
+  position: relative;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  aspect-ratio: 16/9;
+  background: #000;
+  border-radius: 22px;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55), 0 0 40px rgba(139, 92, 246, 0.12), inset 0 1px 0 var(--glass-highlight);
+}
+.video-container video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Storage type badge colors on settings page */
+.src-badge { font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.6rem; border-radius: 999px; letter-spacing: 0.05em; }
+.src-badge.local { background: rgba(45, 212, 191, 0.16); color: #5eead4; border: 1px solid rgba(45, 212, 191, 0.35); }
+.src-badge.nfs { background: rgba(96, 165, 250, 0.16); color: #93c5fd; border: 1px solid rgba(96, 165, 250, 0.35); }
+.src-badge.nas { background: rgba(96, 165, 250, 0.16); color: #93c5fd; border: 1px solid rgba(96, 165, 250, 0.35); }
+.src-badge.s3 { background: rgba(251, 191, 36, 0.14); color: #fcd34d; border: 1px solid rgba(251, 191, 36, 0.35); }
+
+/* Toast notification */
+.toast {
+  position: fixed;
+  top: 84px; right: 24px;
+  z-index: 100;
+  background: rgba(10, 10, 24, 0.75);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid var(--glass-border-strong);
+  border-radius: 16px;
+  padding: 0.85rem 1.25rem;
+  color: #eef2ff;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 var(--glass-highlight);
+  animation: toastIn 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  max-width: 360px;
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(24px) scale(0.96); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+.toast.ok { border-color: rgba(52, 211, 153, 0.5); }
+.toast.err { border-color: rgba(244, 63, 94, 0.5); }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in { animation: fadeIn 0.4s ease; }
+
+/* Decorative floating blobs on login/settings hero areas */
+.aurora-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: 0.5;
+  pointer-events: none;
+  animation: blobDrift 14s ease-in-out infinite alternate;
+}
+@keyframes blobDrift {
+  from { transform: translate(0, 0) scale(1); }
+  to   { transform: translate(30px, -24px) scale(1.12); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-liquid::after, .aurora-blob { animation: none; }
+  .animate-fade-in { animation: none; }
+}

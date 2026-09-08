@@ -1,0 +1,8 @@
+# .dockerignore — backend
+.git
+.gitignore
+.vscode
+*.md
+kubernetes/
+scripts/
+**/*_test.go

@@ -1,0 +1,298 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout>
+  <div class="min-h-screen">
+    <!-- Navbar -->
+    <nav class="sticky top-0 z-50 glass-nav">
+      <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+        <a href="/" class="flex items-center gap-2">
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+            <rect width="32" height="32" rx="10" fill="url(#logoGrad)" />
+            <defs>
+              <linearGradient id="logoGrad" x1="0" y1="0" x2="32" y2="32">
+                <stop offset="0%" stop-color="#a78bfa" />
+                <stop offset="100%" stop-color="#6d28d9" />
+              </linearGradient>
+            </defs>
+            <text x="16" y="21" text-anchor="middle" fill="white" font-size="16" font-weight="bold">X</text>
+          </svg>
+          <span class="text-xl font-bold bg-gradient-to-r from-primary-light to-primary bg-clip-text text-transparent">X动漫</span>
+        </a>
+        <div id="nav-auth" class="flex items-center gap-3">
+          <a href="/login/" class="btn-liquid text-sm">登录</a>
+        </div>
+      </div>
+    </nav>
+
+    <main class="max-w-4xl mx-auto px-4 py-10 animate-fade-in">
+      <div class="mb-8">
+        <h1 class="text-3xl font-bold mb-2">存储管理</h1>
+        <p class="text-text-muted text-sm">添加或移除视频存储源 — 本地磁盘、NFS/NAS 挂载目录、S3 兼容对象存储可同时启用，随时增删。</p>
+      </div>
+
+      <!-- Existing sources -->
+      <section class="glass rounded-3xl p-6 mb-8">
+        <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+          已配置的存储源
+          <span id="src-count" class="text-xs text-text-muted font-normal"></span>
+        </h2>
+        <div id="src-list" class="space-y-3">
+          <div class="text-text-muted text-sm py-6 text-center">加载中…</div>
+        </div>
+      </section>
+
+      <!-- Add new source -->
+      <section class="glass rounded-3xl p-6">
+        <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          添加存储源
+        </h2>
+
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium mb-1.5">名称 <span class="text-text-muted font-normal">(可选，用于展示)</span></label>
+            <input id="src-name" type="text" placeholder="例如：媒体库NFS / 华为OBS" class="glass-input" />
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium mb-1.5">类型</label>
+            <div id="type-cards" class="grid grid-cols-3 gap-3">
+              <button type="button" data-type="local" class="type-card glass rounded-2xl p-3 text-left transition-all" data-selected="true">
+                <div class="text-2xl mb-1">💾</div>
+                <div class="text-sm font-semibold">本地磁盘</div>
+                <div class="text-xs text-text-muted mt-0.5">服务器本地目录</div>
+              </button>
+              <button type="button" data-type="nfs" class="type-card glass rounded-2xl p-3 text-left transition-all" data-selected="false">
+                <div class="text-2xl mb-1">🖧</div>
+                <div class="text-sm font-semibold">NFS / NAS</div>
+                <div class="text-xs text-text-muted mt-0.5">网络挂载目录</div>
+              </button>
+              <button type="button" data-type="s3" class="type-card glass rounded-2xl p-3 text-left transition-all" data-selected="false">
+                <div class="text-2xl mb-1">☁️</div>
+                <div class="text-sm font-semibold">S3 对象存储</div>
+                <div class="text-xs text-text-muted mt-0.5">MinIO / OBS / AWS</div>
+              </button>
+            </div>
+          </div>
+
+          <!-- Filesystem fields -->
+          <div id="fs-fields" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium mb-1.5">视频目录路径</label>
+              <input id="video-path" type="text" placeholder="/app/videos 或 /mnt/nfs-media"
+                class="glass-input" />
+              <p class="text-xs text-text-muted mt-1.5">
+                容器内路径。NFS/NAS 需先在 docker-compose 中挂载到容器，再在此填入挂载点路径。
+              </p>
+            </div>
+          </div>
+
+          <!-- S3 fields -->
+          <div id="s3-fields" class="space-y-4 hidden">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium mb-1.5">Endpoint</label>
+                <input id="s3-endpoint" type="text" placeholder="https://obs.cn-south-1.myhuaweicloud.com" class="glass-input" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1.5">Bucket</label>
+                <input id="s3-bucket" type="text" placeholder="my-bucket" class="glass-input" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1.5">Region</label>
+                <input id="s3-region" type="text" placeholder="cn-south-1" class="glass-input" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1.5">Access Key</label>
+                <input id="s3-access-key" type="text" class="glass-input" />
+              </div>
+              <div class="md:col-span-2">
+                <label class="block text-sm font-medium mb-1.5">Secret Key</label>
+                <input id="s3-secret-key" type="password" placeholder="必填" class="glass-input" />
+              </div>
+            </div>
+          </div>
+
+          <div id="msg" class="hidden text-sm px-4 py-2.5 rounded-xl"></div>
+
+          <button id="add-btn" class="btn-liquid w-full">
+            <span class="relative z-10">添加存储源</span>
+          </button>
+        </div>
+      </section>
+    </main>
+  </div>
+</BaseLayout>
+
+<script>
+  (function () {
+    var listEl = document.getElementById('src-list');
+    var countEl = document.getElementById('src-count');
+    var nameEl = document.getElementById('src-name');
+    var videoPathEl = document.getElementById('video-path');
+    var s3Fields = document.getElementById('s3-fields');
+    var fsFields = document.getElementById('fs-fields');
+    var s3Endpoint = document.getElementById('s3-endpoint');
+    var s3Bucket = document.getElementById('s3-bucket');
+    var s3Region = document.getElementById('s3-region');
+    var s3AccessKey = document.getElementById('s3-access-key');
+    var s3SecretKey = document.getElementById('s3-secret-key');
+    var msg = document.getElementById('msg');
+    var addBtn = document.getElementById('add-btn');
+    var currentType = 'local';
+
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+
+    function toast(text, ok) {
+      var t = document.createElement('div');
+      t.className = 'toast ' + (ok ? 'ok' : 'err');
+      t.textContent = text;
+      document.body.appendChild(t);
+      setTimeout(function () { t.remove(); }, 3200);
+    }
+
+    function showMsg(text, ok) {
+      msg.textContent = text;
+      msg.className = ok
+        ? 'text-sm px-4 py-2.5 rounded-xl text-emerald-300 bg-emerald-400/10 border border-emerald-400/30'
+        : 'text-sm px-4 py-2.5 rounded-xl text-rose-300 bg-rose-400/10 border border-rose-400/30';
+    }
+
+    function typeLabel(type) {
+      return { local: '本地', nfs: 'NFS/NAS', nas: 'NFS/NAS', s3: 'S3' }[type] || type;
+    }
+
+    function selectType(type) {
+      currentType = type;
+      document.querySelectorAll('.type-card').forEach(function (card) {
+        var on = card.getAttribute('data-type') === type;
+        card.setAttribute('data-selected', on ? 'true' : 'false');
+        card.style.borderColor = on ? 'rgba(167,139,250,0.6)' : '';
+        card.style.boxShadow = on ? '0 0 24px rgba(139,92,246,0.35)' : '';
+      });
+      s3Fields.classList.toggle('hidden', type !== 's3');
+      fsFields.classList.toggle('hidden', type === 's3');
+    }
+    document.querySelectorAll('.type-card').forEach(function (card) {
+      card.addEventListener('click', function () { selectType(card.getAttribute('data-type')); });
+    });
+
+    function srcRow(s) {
+      var detail = '';
+      if (s.type === 's3') {
+        detail = esc((s.s3_endpoint || '').replace(/^https?:\/\//, '')) + ' / ' + esc(s.s3_bucket || '');
+        if (!s.s3_secret_set) detail += ' <span class="text-rose-300">(缺少 Secret Key)</span>';
+      } else {
+        detail = esc(s.video_path || '');
+      }
+      return '<div class="glass rounded-2xl p-4 flex items-center justify-between gap-4" data-id="' + esc(s.id) + '">' +
+        '<div class="min-w-0 flex items-center gap-3">' +
+          '<span class="src-badge ' + esc(s.type) + '">' + typeLabel(s.type) + '</span>' +
+          '<div class="min-w-0">' +
+            '<div class="text-sm font-semibold truncate">' + esc(s.name) + '</div>' +
+            '<div class="text-xs text-text-muted truncate font-mono">' + detail + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<button class="btn-danger del-btn text-sm shrink-0" data-id="' + esc(s.id) + '" data-name="' + esc(s.name) + '">删除</button>' +
+      '</div>';
+    }
+
+    function bindDelete() {
+      document.querySelectorAll('.del-btn').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+          if (!confirm('确定删除存储源「' + btn.getAttribute('data-name') + '」？已绑定该源的剧集将无法播放。')) return;
+          btn.disabled = true;
+          try {
+            var res = await fetch('/api/storage-srcs/' + encodeURIComponent(btn.getAttribute('data-id')), {
+              method: 'DELETE', credentials: 'same-origin'
+            });
+            if (res.status === 401) { window.location.href = '/login'; return; }
+            var body = await res.json().catch(function () { return {}; });
+            if (res.ok) { toast('存储源已删除', true); await load(); }
+            else toast(body.error || '删除失败', false);
+          } catch (e) {
+            toast('网络错误', false);
+          }
+        });
+      });
+    }
+
+    async function load() {
+      var res;
+      try {
+        res = await fetch('/api/storage-srcs', { credentials: 'same-origin' });
+      } catch (e) {
+        listEl.innerHTML = '<div class="text-rose-300 text-sm py-6 text-center">无法连接服务器</div>';
+        return;
+      }
+      if (res.status === 401) { window.location.href = '/login'; return; }
+      if (!res.ok) { listEl.innerHTML = '<div class="text-rose-300 text-sm py-6 text-center">加载失败</div>'; return; }
+      var data = await res.json();
+      var sources = data.sources || [];
+      countEl.textContent = '(' + sources.length + ')';
+      if (sources.length === 0) {
+        listEl.innerHTML = '<div class="text-text-muted text-sm py-6 text-center">暂无存储源，请在下方添加</div>';
+        return;
+      }
+      listEl.innerHTML = sources.map(srcRow).join('');
+      bindDelete();
+    }
+
+    addBtn.addEventListener('click', async function () {
+      msg.classList.add('hidden');
+      var body = { name: nameEl.value.trim(), type: currentType };
+      if (currentType === 's3') {
+        body.s3_endpoint = s3Endpoint.value.trim();
+        body.s3_bucket = s3Bucket.value.trim();
+        body.s3_region = s3Region.value.trim() || 'us-east-1';
+        body.s3_access_key = s3AccessKey.value.trim();
+        body.s3_secret_key = s3SecretKey.value;
+        if (!body.s3_endpoint || !body.s3_bucket || !body.s3_access_key || !body.s3_secret_key) {
+          showMsg('S3 存储需要填写 Endpoint、Bucket、Access Key 和 Secret Key', false);
+          return;
+        }
+      } else {
+        body.video_path = videoPathEl.value.trim();
+        if (!body.video_path) {
+          showMsg('请填写视频目录路径', false);
+          return;
+        }
+      }
+
+      addBtn.disabled = true;
+      try {
+        var res = await fetch('/api/storage-srcs', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        if (res.status === 401) { window.location.href = '/login'; return; }
+        var resp = await res.json().catch(function () { return {}; });
+        if (res.ok) {
+          toast('存储源「' + (body.name || typeLabel(body.type)) + '」已添加', true);
+          nameEl.value = ''; videoPathEl.value = '';
+          s3Endpoint.value = ''; s3Bucket.value = ''; s3Region.value = '';
+          s3AccessKey.value = ''; s3SecretKey.value = '';
+          await load();
+        } else {
+          showMsg(resp.error || '添加失败', false);
+        }
+      } catch (e) {
+        showMsg('网络错误', false);
+      } finally {
+        addBtn.disabled = false;
+      }
+    });
+
+    selectType('local');
+    load();
+  })();
+</script>
