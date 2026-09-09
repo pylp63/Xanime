@@ -1,0 +1,8 @@
+# .dockerignore — frontend
+node_modules
+.git
+*.md
+.gitignore
+.vscode
+kubernetes/
+scripts/

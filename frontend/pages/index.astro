@@ -1,7 +1,9 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 
+const categories = ["全部", "动作", "冒险", "奇幻", "科幻", "喜剧", "日常", "悬疑", "推理", "黑暗"];
 const search = Astro.url.searchParams.get('search') || '';
+const activeCategory = Astro.url.searchParams.get('category') || '';
 ---
 
 <BaseLayout>
@@ -35,7 +37,7 @@ const search = Astro.url.searchParams.get('search') || '';
         {!search && (
           <div class="mb-10 text-center">
             <h1 class="text-3xl md:text-4xl font-bold mb-3">探索新世界 • <span class="brand-text">X动漫</span></h1>
-            <p class="text-text-muted max-w-xl mx-auto">个人媒体库 · 实时扫描存储源目录</p>
+            <p class="text-text-muted max-w-xl mx-auto">海量影片资源 · 流畅播放体验</p>
           </div>
         )}
         {search && (
@@ -43,6 +45,17 @@ const search = Astro.url.searchParams.get('search') || '';
             <h2 class="text-lg">搜索结果：<span class="brand-text">"{search}"</span><span class="text-text-muted ml-2 text-sm" id="result-count"></span></h2>
           </div>
         )}
+        <div class="flex flex-wrap gap-2 mb-8">
+          {categories.map(cat => {
+            const isActive = (cat === "全部" && !search && !activeCategory) || cat === activeCategory;
+            const params = new URLSearchParams();
+            if (search) params.set('search', search);
+            if (cat !== "全部") params.set('category', cat);
+            const qs = params.toString();
+            const href = qs ? `/?${qs}` : '/';
+            return <a href={href} class={`filter-pill ${isActive ? 'active' : ''}`}>{cat}</a>;
+          })}
+        </div>
         <div id="grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
           <div class="col-span-full text-center py-20 text-text-muted text-lg">加载中…</div>
         </div>
@@ -50,7 +63,7 @@ const search = Astro.url.searchParams.get('search') || '';
     </div>
 
     <footer class="text-center text-text-muted text-sm py-8 mt-16">
-      X动漫 &copy; {new Date().getFullYear()}
+      X动漫 &copy; {new Date().getFullYear()} &mdash; Built with Astro + Go
     </footer>
   </div>
 </BaseLayout>
@@ -61,20 +74,27 @@ const search = Astro.url.searchParams.get('search') || '';
     const countEl = document.getElementById('result-count');
     const q = new URLSearchParams(window.location.search);
 
-    function esc(s) {
-      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
-        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-      });
+    function coverUrl(cover) {
+      if (!cover || !cover.trim()) {
+        return 'https://via.placeholder.com/480x640/111113/eeeeee?text=Xanime';
+      }
+      if (/^https?:/.test(cover)) return cover;
+      if (cover.charAt(0) === '/') return cover;
+      return '/static/' + cover;
     }
 
     async function load() {
       const params = new URLSearchParams();
+      params.set('page', '1');
+      params.set('size', '24');
       const s = q.get('search');
-      if (s) params.set('search', s);
+      const c = q.get('category');
+      params.set('search', s || '');
+      params.set('category', c || '');
 
       let res;
       try {
-        res = await fetch('/api/library?' + params, { credentials: 'same-origin' });
+        res = await fetch('/api/xanimes?' + params, { credentials: 'same-origin' });
       } catch (e) {
         grid.innerHTML = '<div class="col-span-full text-center py-20 text-text-muted text-lg">无法连接服务器</div>';
         return;
@@ -94,26 +114,23 @@ const search = Astro.url.searchParams.get('search') || '';
       if (countEl) countEl.textContent = '(' + (data.total || list.length) + ' 部)';
 
       if (list.length === 0) {
-        grid.innerHTML = '<div class="col-span-full glass rounded-3xl text-center py-16 px-6">' +
-          '<p class="text-text-muted text-lg">媒体库为空</p>' +
-          '<p class="text-text-muted text-sm mt-2">在存储源目录下创建动漫文件夹并放入视频文件即可，例如 <code class="text-cyan-300">/动漫目录/第01话.mp4</code></p>' +
-          '<a href="/settings/" class="btn-glass text-sm inline-block mt-4">管理存储源</a></div>';
+        grid.innerHTML = '<div class="col-span-full text-center py-20"><p class="text-text-muted text-lg">暂无影片资源</p><p class="text-text-muted text-sm mt-2">请稍后再来探索</p></div>';
         return;
       }
 
       grid.innerHTML = list.map(function (a) {
-        const href = '/xanime/' + encodeURIComponent(a.source_id) + '/' + encodeURIComponent(a.name) + '/';
-        const cover = a.cover || ('https://via.placeholder.com/480x640/082f49/22d3ee?text=' + encodeURIComponent(a.name.slice(0, 6)));
-        return '<a href="' + href + '" class="xanime-card block group">' +
+        return '<a href="/xanime/' + a.id + '/" class="xanime-card block group">' +
           '<div class="relative aspect-[3/4] overflow-hidden">' +
-            '<img src="' + esc(cover) + '" alt="' + esc(a.name) + '" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />' +
-            '<div class="glass-chip absolute bottom-2 left-2 text-xs px-2 py-1 rounded-lg">' + a.episodes + ' 集</div>' +
+            '<img src="' + coverUrl(a.cover) + '" alt="' + a.title + '" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />' +
+            (a.rating > 0 ? '<div class="glass-chip-accent absolute top-2 right-2 text-xs font-bold px-2 py-1 rounded-lg">★ ' + a.rating.toFixed(1) + '</div>' : '') +
+            '<div class="glass-chip absolute bottom-2 left-2 text-xs px-2 py-1 rounded-lg">' + a.episodes + ' 话</div>' +
           '</div>' +
           '<div class="p-3">' +
-            '<h3 class="font-semibold text-sm leading-tight line-clamp-2">' + esc(a.name) + '</h3>' +
+            '<h3 class="font-semibold text-sm leading-tight line-clamp-1">' + a.title + '</h3>' +
             '<div class="flex items-center gap-2 mt-1.5">' +
-              (a.year ? '<span class="text-xs text-text-muted">' + a.year + '</span><span class="w-1 h-1 bg-text-muted rounded-full"></span>' : '') +
-              '<span class="tag-chip truncate max-w-[110px]">' + esc(a.source_name) + '</span>' +
+              '<span class="text-xs text-text-muted">' + a.year + '</span>' +
+              '<span class="w-1 h-1 bg-text-muted rounded-full"></span>' +
+              '<span class="tag-chip">' + a.category + '</span>' +
             '</div>' +
           '</div>' +
         '</a>';

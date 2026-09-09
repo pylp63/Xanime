@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -634,6 +636,282 @@ func streamVideo(c *gin.Context) {
 	c.File(fullPath)
 }
 
+// ─── Library: scan real directories ──────────────────────────────────────────
+
+// videoExts are the file extensions treated as playable episodes.
+var videoExts = map[string]bool{
+	".mp4": true, ".mkv": true, ".webm": true, ".avi": true, ".mov": true, ".flv": true, ".m4v": true, ".ts": true, ".wmv": true,
+}
+
+// coverNames are file names recognized as an anime cover image.
+var coverNames = map[string]bool{
+	"cover.jpg": true, "cover.jpeg": true, "cover.png": true, "cover.webp": true,
+	"poster.jpg": true, "poster.jpeg": true, "poster.png": true, "poster.webp": true,
+}
+
+// LibraryAnime is one anime = one real directory under a filesystem source.
+type LibraryAnime struct {
+	Name     string `json:"name"`
+	SourceID string `json:"source_id"`
+	SourceName string `json:"source_name"`
+	Cover    string `json:"cover"`
+	Episodes int    `json:"episodes"`
+	Year     int    `json:"year"`
+}
+
+// LibraryEpisode is one episode = one real video file. Name is the file name
+// without extension (the user's own naming), File the real name, Path the
+// streamable "sourceID/dir/file" key.
+type LibraryEpisode struct {
+	Name string `json:"name"`
+	File string `json:"file"`
+	Path string `json:"path"`
+	Size int64  `json:"size"`
+}
+
+// naturalLess compares strings with embedded numbers compared numerically
+// ("第02话" < "第10话", "EP2" < "EP10").
+func naturalLess(a, b string) bool {
+	i, j := 0, 0
+	for i < len(a) && j < len(b) {
+		ca, cb := a[i], b[j]
+		da, db := ca >= '0' && ca <= '9', cb >= '0' && cb <= '9'
+		switch {
+		case da && db:
+			// compare number runs numerically
+			si, sj := i, j
+			for si < len(a) && a[si] >= '0' && a[si] <= '9' { si++ }
+			for sj < len(b) && b[sj] >= '0' && b[sj] <= '9' { sj++ }
+			na, _ := strconv.Atoi(a[i:si])
+			nb, _ := strconv.Atoi(b[j:sj])
+			if na != nb { return na < nb }
+			i, j = si, sj
+		default:
+			if ca != cb { return ca < cb }
+			i++; j++
+		}
+	}
+	return len(a)-i < len(b)-j
+}
+
+// extractYear pulls a 4-digit year (1900-2099) from a directory name,
+// e.g. "孤独摇滚 (2022)" or "孤独摇滚（2022）" or "进击的巨人 2023".
+func extractYear(name string) int {
+	re := regexp.MustCompile(`(19|20)\d{2}`)
+	for _, m := range re.FindAllString(name, -1) {
+		y, _ := strconv.Atoi(m)
+		if y >= 1900 && y <= 2099 {
+			return y
+		}
+	}
+	return 0
+}
+
+// isDirEntry reports whether an entry is a directory, resolving symlinks
+// (host-side "ln -s" workflow relies on this).
+func isDirEntry(root, name string) bool {
+	fi, err := os.Stat(filepath.Join(root, name))
+	return err == nil && fi.IsDir()
+}
+
+// countVideos returns (episodeCount, coverURL) for a directory.
+func countVideos(dir string) (int, string, string) {
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		return 0, "", ""
+	}
+	epCount, firstVideo, cover := 0, "", ""
+	for _, f := range files {
+		if strings.HasPrefix(f.Name(), ".") { continue }
+		full := filepath.Join(dir, f.Name())
+		fi, err := os.Stat(full)
+		if err != nil || fi.IsDir() { continue }
+		if videoExts[strings.ToLower(filepath.Ext(f.Name()))] {
+			epCount++
+			if firstVideo == "" { firstVideo = f.Name() }
+		} else if coverNames[strings.ToLower(f.Name())] {
+			cover = f.Name()
+		}
+	}
+	return epCount, firstVideo, cover
+}
+
+// scanSourceDir returns the animes found under a filesystem source root.
+// Each non-hidden directory containing video files is one anime. A directory
+// WITHOUT videos but WITH anime subdirectories (a symlinked collection, e.g.
+// "ln -s /mnt/nfs /data/Xanime/NFS媒体库") is recursed one level: its animes
+// are exposed as "Collection/AnimeName" so files stream from the right path.
+func scanSourceDir(src *StorageSource) []LibraryAnime {
+	var out []LibraryAnime
+	var walk func(baseRel string, depth int)
+	walk = func(baseRel string, depth int) {
+		absBase := filepath.Join(src.VideoPath, baseRel)
+		entries, err := os.ReadDir(absBase)
+		if err != nil {
+			return
+		}
+		for _, e := range entries {
+			if strings.HasPrefix(e.Name(), ".") { continue }
+			if !isDirEntry(absBase, e.Name()) { continue }
+			dirAbs := filepath.Join(absBase, e.Name())
+			epCount, _, coverFile := countVideos(dirAbs)
+			relName := e.Name()
+			if baseRel != "" {
+				relName = baseRel + "/" + e.Name()
+			}
+			if epCount > 0 {
+				cover := ""
+				if coverFile != "" {
+					cover = fmt.Sprintf("/api/library/%s/%s/cover", src.ID, relName)
+				}
+				out = append(out, LibraryAnime{
+					Name: relName, SourceID: src.ID, SourceName: src.Name,
+					Cover: cover, Episodes: epCount, Year: extractYear(e.Name()),
+				})
+				continue
+			}
+			// no videos directly inside → maybe a collection dir; recurse once
+			if depth < 2 {
+				walk(relName, depth+1)
+			}
+		}
+	}
+	walk("", 0)
+	return out
+}
+
+// listLibrary handles GET /api/library[?search=] — scans every filesystem
+// source in real time; no DB rows involved.
+func listLibrary(c *gin.Context) {
+	search := strings.ToLower(strings.TrimSpace(c.Query("search")))
+	var data []LibraryAnime
+	for i := range storageSources {
+		src := &storageSources[i]
+		if src.Type == "s3" {
+			continue // S3 listing requires a ListObjects call — filesystem only for now
+		}
+		for _, a := range scanSourceDir(src) {
+			if search == "" || strings.Contains(strings.ToLower(a.Name), search) {
+				data = append(data, a)
+			}
+		}
+	}
+	if data == nil { data = []LibraryAnime{} }
+	c.JSON(http.StatusOK, gin.H{"data": data, "total": len(data)})
+}
+
+// libraryResource dispatches /api/library/:src/*rest: rest = "Name/episodes"
+// or "Name/cover" (Name possibly nested "Collection/Anime").
+func libraryResource(c *gin.Context) {
+	rest := strings.TrimPrefix(c.Param("rest"), "/")
+	switch {
+	case strings.HasSuffix(rest, "/episodes"):
+		listLibraryEpisodes(c, strings.TrimSuffix(rest, "/episodes"))
+	case strings.HasSuffix(rest, "/cover"):
+		serveLibraryCover(c, strings.TrimSuffix(rest, "/cover"))
+	default:
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+	}
+}
+
+// validLibraryName validates a possibly-nested anime name from a *name route:
+// 1-2 non-empty segments, no dots, no backslashes, no hidden segments.
+func validLibraryName(name string) bool {
+	if name == "" || len(name) > 512 {
+		return false
+	}
+	if strings.Contains(name, "..") || strings.ContainsAny(name, "\\") {
+		return false
+	}
+	segs := strings.Split(name, "/")
+	if len(segs) > 2 {
+		return false
+	}
+	for _, s := range segs {
+		if s == "" || strings.HasPrefix(s, ".") {
+			return false
+		}
+	}
+	return true
+}
+
+// listLibraryEpisodes handles the episodes resource — real file names,
+// naturally sorted. src disambiguates same-named dirs across sources;
+// name may be one level nested ("Collection/Anime").
+func listLibraryEpisodes(c *gin.Context, name string) {
+	srcID := c.Param("src")
+	if !validLibraryName(name) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid name"})
+		return
+	}
+
+	src := findSource(srcID)
+	if src == nil || src.Type == "s3" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "source not found"})
+		return
+	}
+
+	dirBase := filepath.Join(src.VideoPath, name)
+	if fi, err := os.Stat(dirBase); err != nil || !fi.IsDir() {
+		c.JSON(http.StatusNotFound, gin.H{"error": "anime not found"})
+		return
+	}
+
+	var eps []LibraryEpisode
+	files, err := os.ReadDir(dirBase)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	for _, f := range files {
+		if f.IsDir() || strings.HasPrefix(f.Name(), ".") { continue }
+		if !videoExts[strings.ToLower(filepath.Ext(f.Name()))] { continue }
+		fi, _ := f.Info()
+		eps = append(eps, LibraryEpisode{
+			Name: strings.TrimSuffix(f.Name(), filepath.Ext(f.Name())),
+			File: f.Name(),
+			Path: fmt.Sprintf("%s/%s/%s", src.ID, name, f.Name()),
+			Size: fi.Size(),
+		})
+	}
+	sort.Slice(eps, func(i, j int) bool { return naturalLess(eps[i].File, eps[j].File) })
+	if eps == nil { eps = []LibraryEpisode{} }
+	c.JSON(http.StatusOK, eps)
+}
+
+// serveLibraryCover handles the cover resource — serves the cover image found
+// inside the anime directory on the given source.
+func serveLibraryCover(c *gin.Context, name string) {
+	srcID := c.Param("src")
+	if !validLibraryName(name) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid name"})
+		return
+	}
+	src := findSource(srcID)
+	if src == nil || src.Type == "s3" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "source not found"})
+		return
+	}
+	dir := filepath.Join(src.VideoPath, name)
+	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
+		c.JSON(http.StatusNotFound, gin.H{"error": "anime not found"})
+		return
+	}
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	for _, f := range files {
+		if f.IsDir() { continue }
+		if coverNames[strings.ToLower(f.Name())] {
+			c.File(filepath.Join(dir, f.Name()))
+			return
+		}
+	}
+	c.JSON(http.StatusNotFound, gin.H{"error": "cover not found"})
+}
+
 // ─── Settings / Storage Sources ───────────────────────────────────────────────
 
 func getSetting(key string) string {
@@ -1144,6 +1422,13 @@ func newRouter() *gin.Engine {
 	api.GET("/storage-srcs", listSources)
 	api.POST("/storage-srcs", addSource)
 	api.DELETE("/storage-srcs/:id", deleteSource)
+
+	// Library — real directory / file scanning (personal library).
+	// One catch-all route: /api/library/:src/*rest where rest is
+	// "Name" (unused), "Name/episodes", "Name/cover"; Name may be nested
+	// one level ("Collection/AnimeName").
+	api.GET("/library", listLibrary)
+	api.GET("/library/:src/*rest", libraryResource)
 
 	// Video streaming (with anti-hotlink)
 	api.GET("/stream", streamVideo)

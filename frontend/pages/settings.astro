@@ -73,12 +73,11 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           <div id="fs-fields" class="space-y-4">
             <div>
               <label class="block text-sm font-medium mb-1.5">视频目录路径</label>
-              <input id="video-path" type="text" placeholder="/data/Xanime 或 /app/videos"
+              <input id="video-path" type="text" placeholder="/app/videos 或 /mnt/nfs-media"
                 class="glass-input" />
-              <div class="text-xs text-text-muted mt-1.5 leading-relaxed">
-                <p>推荐方案：容器已挂载宿主机 <code class="text-cyan-300">/data/Xanime</code>（可写）和 <code class="text-cyan-300">/mnt</code>（NFS/NAS 挂载区）。</p>
-                <p class="mt-1">新存储无需改配置 — 宿主机上把目录软链进来即可：<code class="text-cyan-300">ln -s /mnt/我的NFS /data/Xanime/NFS媒体库</code></p>
-              </div>
+              <p class="text-xs text-text-muted mt-1.5">
+                容器内路径。NFS/NAS 需先在 docker-compose 中挂载到容器，再在此填入挂载点路径。
+              </p>
             </div>
           </div>
 
@@ -153,8 +152,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     function showMsg(text, ok) {
       msg.textContent = text;
       msg.className = ok
-        ? 'text-sm px-4 py-2.5 rounded-xl text-emerald-300 bg-emerald-400/10 border border-emerald-400/30'
-        : 'text-sm px-4 py-2.5 rounded-xl text-rose-300 bg-rose-400/10 border border-rose-400/30';
+        ? 'text-sm px-4 py-2.5 rounded-xl text-emerald-600 bg-emerald-400/10 border border-emerald-400/40'
+        : 'text-sm px-4 py-2.5 rounded-xl text-rose-600 bg-rose-400/10 border border-rose-400/40';
     }
 
     function typeLabel(type) {
@@ -164,7 +163,10 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     function selectType(type) {
       currentType = type;
       document.querySelectorAll('.type-card').forEach(function (card) {
-        card.setAttribute('data-selected', card.getAttribute('data-type') === type ? 'true' : 'false');
+        var on = card.getAttribute('data-type') === type;
+        card.setAttribute('data-selected', on ? 'true' : 'false');
+        card.style.borderColor = on ? 'var(--glass-border-strong)' : '';
+        card.style.boxShadow = on ? '0 0 24px var(--glow)' : '';
       });
       s3Fields.classList.toggle('hidden', type !== 's3');
       fsFields.classList.toggle('hidden', type === 's3');
@@ -177,7 +179,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       var detail = '';
       if (s.type === 's3') {
         detail = esc((s.s3_endpoint || '').replace(/^https?:\/\//, '')) + ' / ' + esc(s.s3_bucket || '');
-        if (!s.s3_secret_set) detail += ' <span class="text-rose-300">(缺少 Secret Key)</span>';
+        if (!s.s3_secret_set) detail += ' <span class="text-rose-500">(缺少 Secret Key)</span>';
       } else {
         detail = esc(s.video_path || '');
       }
@@ -218,11 +220,11 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       try {
         res = await fetch('/api/storage-srcs', { credentials: 'same-origin' });
       } catch (e) {
-        listEl.innerHTML = '<div class="text-rose-300 text-sm py-6 text-center">无法连接服务器</div>';
+        listEl.innerHTML = '<div class="text-rose-500 text-sm py-6 text-center">无法连接服务器</div>';
         return;
       }
       if (res.status === 401) { window.location.href = '/login'; return; }
-      if (!res.ok) { listEl.innerHTML = '<div class="text-rose-300 text-sm py-6 text-center">加载失败</div>'; return; }
+      if (!res.ok) { listEl.innerHTML = '<div class="text-rose-500 text-sm py-6 text-center">加载失败</div>'; return; }
       var data = await res.json();
       var sources = data.sources || [];
       countEl.textContent = '(' + sources.length + ')';

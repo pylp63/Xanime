@@ -22,6 +22,11 @@ services:
       - xanime_data:/app/data
       - ${VIDEO_PATH:-./videos}:/app/videos
       - ${STATIC_PATH:-./static}:/app/static
+      # 统一存储入口: 宿主机 /data/Xanime 内可放真实目录或软链(NFS/NAS 先挂到宿主机
+      # /mnt 再 ln -s 到 /data/Xanime), 新增存储无需修改 compose 重启容器。
+      - /data/Xanime:/data/Xanime
+      # NFS/NAS 宿主机挂载区(只读透传, 软链目标可达)。
+      - /mnt:/mnt:ro
     restart: unless-stopped
 
 volumes:

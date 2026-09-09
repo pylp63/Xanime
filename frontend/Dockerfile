@@ -1,0 +1,1 @@
+# Single-image Dockerfile — used by scripts, builds both frontend (Astro) + backend (Go) into one image

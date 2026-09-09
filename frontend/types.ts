@@ -11,7 +11,7 @@ export interface Episode {
 
 export function getCoverUrl(cover: string): string {
   if (!cover || cover.trim() === "") {
-    return "https://via.placeholder.com/480x640/1e1b4b/818cf8?text=Xanime";
+    return "https://via.placeholder.com/480x640/111113/eeeeee?text=Xanime";
   }
   if (cover.startsWith("http")) return cover;
   if (cover.startsWith("/")) return cover;

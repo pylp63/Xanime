@@ -3,6 +3,15 @@
   const nav = document.getElementById('nav-auth');
   if (!nav) return;
 
+  nav.addEventListener('click', function (e) {
+    var logoutBtn = e.target.closest('#logout-btn');
+    if (logoutBtn) {
+      e.preventDefault();
+      fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' })
+        .then(function () { window.location.href = '/login'; });
+    }
+  });
+
   fetch('/api/me', { credentials: 'same-origin' })
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (me) {
@@ -11,38 +20,30 @@
         '<span class="text-text-muted text-sm px-1">' + me.username + '</span>' +
         '<a href="/settings/" class="btn-glass text-sm">设置</a>' +
         '<button id="logout-btn" class="btn-glass text-sm">退出</button>';
-      const lb = document.getElementById('logout-btn');
-      if (lb) lb.addEventListener('click', function (e) {
-        e.preventDefault();
-        fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' })
-          .then(function () { window.location.href = '/login'; });
-      });
     })
     .catch(function () {});
 })();
 
 // SPA client-side router for detail/watch pages
+// Routes: /xanime/<srcID>/<name>/  and  /watch/<srcID>/<name>/<file>/
 const path = window.location.pathname;
 const app = document.getElementById('app');
 
 if (app) {
-  const detailMatch = path.match(/^\/xanime\/(\d+)\/?$/);
-  const watchMatch = path.match(/^\/watch\/(\d+)\/(\d+)\/?$/);
+  const detailMatch = path.match(/^\/xanime\/([^/]+)\/(.+)\/?$/);
+  const watchMatch = path.match(/^\/watch\/([^/]+)\/(.+)\/([^/]+)\/?$/);
 
   if (detailMatch) {
-    renderDetail(Number(detailMatch[1]));
+    renderDetail(decodeURIComponent(detailMatch[1]), decodeURIComponent(detailMatch[2]));
   } else if (watchMatch) {
-    renderWatch(Number(watchMatch[1]), Number(watchMatch[2]));
+    renderWatch(decodeURIComponent(watchMatch[1]), decodeURIComponent(watchMatch[2]), decodeURIComponent(watchMatch[3]));
   }
 }
 
-function getCoverUrl(cover) {
-  if (!cover || !cover.trim() === '') {
-    return 'https://via.placeholder.com/480x640/141428/8b5cf6?text=Xanime';
-  }
-  if (cover.startsWith('http')) return cover;
-  if (cover.startsWith('/')) return cover;
-  return '/static/' + cover;
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
 }
 
 async function fetchJSON(url) {
@@ -62,80 +63,99 @@ async function presignURL(key) {
   } catch (e) { return ''; }
 }
 
-async function renderDetail(id) {
-  const xanime = await fetchJSON('/api/xanimes/' + id);
-  const episodes = await fetchJSON('/api/xanimes/' + id + '/episodes');
+function fmtSize(bytes) {
+  if (!bytes) return '';
+  var units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  var i = 0;
+  while (bytes >= 1024 && i < units.length - 1) { bytes /= 1024; i++; }
+  return bytes.toFixed(bytes >= 100 || i === 0 ? 0 : 1) + ' ' + units[i];
+}
 
-  if (!xanime) {
-    app.innerHTML = '<div class="text-center py-20"><p class="text-text-muted text-lg">影片未找到</p><a href="/" class="text-primary-light mt-4 inline-block">返回首页</a></div>';
+async function renderDetail(srcID, name) {
+  // Library detail: episodes come from real files in the anime directory
+  const eps = await fetchJSON('/api/library/' + encodeURIComponent(srcID) + '/' + encodeURIComponent(name) + '/episodes');
+  const lib = await fetchJSON('/api/library');
+  const meta = lib && (lib.data || []).find(function (a) { return a.name === name && a.source_id === srcID; });
+
+  if (!eps) {
+    app.innerHTML = '<div class="text-center py-20"><p class="text-text-muted text-lg">未找到该动漫目录</p><a href="/" class="brand-text mt-4 inline-block">返回首页</a></div>';
     return;
   }
 
-  var eps = (episodes || []).map(function(ep) {
-    return '<a href="/watch/' + xanime.id + '/' + ep.number + '/" class="episode-btn text-center py-2 text-sm font-medium">' + ep.number + '</a>';
+  var epList = (eps || []).map(function (ep, i) {
+    return '<a href="/watch/' + encodeURIComponent(srcID) + '/' + encodeURIComponent(name) + '/' + encodeURIComponent(ep.file) + '/" class="episode-btn px-3 py-2.5 text-sm font-medium text-center truncate" title="' + esc(ep.file) + '">' +
+      esc(ep.name) + '</a>';
   }).join('');
+
+  var cover = meta && meta.cover
+    ? meta.cover
+    : 'https://via.placeholder.com/480x640/082f49/22d3ee?text=' + encodeURIComponent(name.slice(0, 6));
 
   app.innerHTML =
     '<main class="max-w-7xl mx-auto px-4 py-6 animate-fade-in">' +
       '<div class="flex flex-col md:flex-row gap-8 mb-10">' +
-        '<div class="w-48 shrink-0"><img src="' + getCoverUrl(xanime.cover) + '" alt="' + xanime.title + '" class="w-full rounded-2xl shadow-2xl border border-white/10" /></div>' +
+        '<div class="w-48 shrink-0"><img src="' + esc(cover) + '" alt="' + esc(name) + '" class="w-full rounded-2xl shadow-2xl border border-white/10" /></div>' +
         '<div class="glass rounded-3xl p-6 flex-1">' +
-          '<h1 class="text-2xl md:text-3xl font-bold mb-3">' + xanime.title + '</h1>' +
+          '<h1 class="text-2xl md:text-3xl font-bold mb-3">' + esc(name) + '</h1>' +
           '<div class="flex flex-wrap items-center gap-3 text-sm mb-4">' +
-            (xanime.rating > 0 ? '<span class="text-yellow-300 font-bold">★ ' + xanime.rating.toFixed(1) + '</span>' : '') +
-            '<span class="text-text-muted">' + xanime.year + '</span>' +
-            '<span class="glass-chip-accent px-2 py-0.5 rounded-lg text-xs">' + xanime.category + '</span>' +
-            '<span class="text-text-muted">' + xanime.episodes + ' 话</span>' +
+            '<span class="text-text-muted">' + (eps ? eps.length : 0) + ' 集</span>' +
+            (meta && meta.year ? '<span class="tag-chip">' + meta.year + '</span>' : '') +
+            (meta && meta.source_name ? '<span class="tag-chip">' + esc(meta.source_name) + '</span>' : '') +
           '</div>' +
-          '<p class="text-text-muted text-sm leading-relaxed whitespace-pre-line">' + xanime.description + '</p>' +
+          '<p class="text-text-muted text-sm">剧集来自目录中的真实视频文件，按文件名自然排序。</p>' +
         '</div>' +
       '</div>' +
       '<h2 class="text-xl font-bold mb-4">剧集列表</h2>' +
-      '<div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5">' + (eps || '<p class="text-text-muted text-sm">暂无剧集</p>') + '</div>' +
+      '<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">' + (epList || '<p class="text-text-muted text-sm">该目录下没有视频文件</p>') + '</div>' +
     '</main>';
 }
 
-async function renderWatch(xanimeId, epNumber) {
-  var xanime = await fetchJSON('/api/xanimes/' + xanimeId);
-  var episodes = await fetchJSON('/api/xanimes/' + xanimeId + '/episodes');
+async function renderWatch(srcID, name, file) {
+  const eps = await fetchJSON('/api/library/' + encodeURIComponent(srcID) + '/' + encodeURIComponent(name) + '/episodes');
+  const lib = await fetchJSON('/api/library');
+  const meta = lib && (lib.data || []).find(function (a) { return a.name === name && a.source_id === srcID; });
 
-  if (!xanime) {
-    app.innerHTML = '<div class="text-center py-20"><p class="text-text-muted">加载中…</p></div>';
+  if (!eps || !eps.length) {
+    app.innerHTML = '<div class="text-center py-20"><p class="text-text-muted">未找到该动漫目录</p></div>';
     return;
   }
 
-  var eps = episodes || [];
+  var list = eps || [];
   var current = null, prevEp = null, nextEp = null;
-  for (var i = 0; i < eps.length; i++) {
-    if (eps[i].number === epNumber) current = eps[i];
-    if (eps[i].number === epNumber - 1) prevEp = eps[i];
-    if (eps[i].number === epNumber + 1) nextEp = eps[i];
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].file === file) { current = list[i]; }
   }
+  var idx = list.indexOf(current);
+  if (idx > 0) prevEp = list[idx - 1];
+  if (idx >= 0 && idx < list.length - 1) nextEp = list[idx + 1];
+  if (!current && list.length) { current = list[0]; idx = 0; }
 
-  // Get presigned URL from backend (works for local, NFS and S3 sources)
+  // Resolve the playable URL through presign (works for local/NFS/S3)
   var videoSrc = '';
   if (current) {
-    videoSrc = await presignURL(current.video_url);
+    videoSrc = await presignURL(current.path);
   }
 
-  var epGrid = eps.map(function(ep) {
-    var cls = ep.number === epNumber ? 'episode-btn active text-center py-2 text-sm font-medium' : 'episode-btn text-center py-2 text-sm font-medium';
-    return '<a href="/watch/' + xanime.id + '/' + ep.number + '/" class="' + cls + '">' + ep.number + '</a>';
+  var epGrid = list.map(function (ep) {
+    var cls = ep.file === file ? 'episode-btn active' : 'episode-btn';
+    return '<a href="/watch/' + encodeURIComponent(srcID) + '/' + encodeURIComponent(name) + '/' + encodeURIComponent(ep.file) + '/" class="' + cls + ' px-2.5 py-2 text-xs font-medium text-center truncate" title="' + esc(ep.file) + '">' + esc(ep.name) + '</a>';
   }).join('');
+
+  var title = current ? current.name : file;
 
   app.innerHTML =
     '<main class="max-w-6xl mx-auto px-4 py-6 animate-fade-in">' +
       '<div class="video-container shadow-2xl mb-6">' +
-        (videoSrc ? '<video controls autoplay class="w-full h-full"><source src="' + videoSrc + '" type="video/mp4" /></video>' : '<div class="flex items-center justify-center h-full text-text-muted">暂无视频源</div>') +
+        (videoSrc ? '<video controls autoplay class="w-full h-full"><source src="' + videoSrc + '" /></video>' : '<div class="flex items-center justify-center h-full text-text-muted">暂无视频源</div>') +
       '</div>' +
-      '<div class="glass rounded-3xl p-5 flex items-center justify-between mb-6"><div>' +
-        '<h1 class="text-lg md:text-xl font-bold">' + xanime.title + ' - 第 ' + epNumber + ' 话</h1>' +
-        (current ? '<p class="text-text-muted text-sm mt-0.5">' + current.title + '</p>' : '') +
+      '<div class="glass rounded-3xl p-5 flex flex-wrap items-center justify-between gap-3 mb-6"><div class="min-w-0">' +
+        '<h1 class="text-lg md:text-xl font-bold truncate">' + esc(name) + ' · ' + esc(title) + '</h1>' +
+        (current && current.size ? '<p class="text-text-muted text-xs mt-0.5">' + fmtSize(current.size) + ' · ' + esc(current.file) + '</p>' : '') +
       '</div><div class="flex gap-2">' +
-        (prevEp ? '<a href="/watch/' + xanime.id + '/' + prevEp.number + '/" class="btn-glass text-sm">← 上一话</a>' : '<span class="btn-glass text-sm opacity-40 cursor-default">← 上一话</span>') +
-        (nextEp ? '<a href="/watch/' + xanime.id + '/' + nextEp.number + '/" class="btn-glass text-sm">下一话 →</a>' : '<span class="btn-glass text-sm opacity-40 cursor-default">下一话 →</span>') +
+        (prevEp ? '<a href="/watch/' + encodeURIComponent(srcID) + '/' + encodeURIComponent(name) + '/' + encodeURIComponent(prevEp.file) + '/" class="btn-glass text-sm">← ' + esc(prevEp.name) + '</a>' : '<span class="btn-glass text-sm opacity-40 cursor-default">← 上一集</span>') +
+        (nextEp ? '<a href="/watch/' + encodeURIComponent(srcID) + '/' + encodeURIComponent(name) + '/' + encodeURIComponent(nextEp.file) + '/" class="btn-glass text-sm">' + esc(nextEp.name) + ' →</a>' : '<span class="btn-glass text-sm opacity-40 cursor-default">下一集 →</span>') +
       '</div></div>' +
       '<h2 class="font-bold mb-3">剧集列表</h2>' +
-      '<div class="grid grid-cols-5 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2.5">' + epGrid + '</div>' +
+      '<div class="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-9 gap-2.5">' + epGrid + '</div>' +
     '</main>';
 }
