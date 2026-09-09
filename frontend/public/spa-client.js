@@ -16,9 +16,12 @@
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (me) {
       if (!me || !me.username) return;
+      var isAdmin = me.role === 'admin';
       nav.innerHTML =
-        '<span class="text-text-muted text-sm px-1">' + me.username + '</span>' +
-        '<a href="/settings/" class="btn-glass text-sm">设置</a>' +
+        '<span class="text-text-muted text-sm px-1">' + me.username + (isAdmin ? '' : '') + '</span>' +
+        (isAdmin
+          ? '<a href="/settings/" class="btn-glass text-sm">设置</a>'
+          : '<a href="/password/" class="btn-glass text-sm">修改密码</a>') +
         '<button id="logout-btn" class="btn-glass text-sm">退出</button>';
     })
     .catch(function () {});
@@ -34,10 +37,54 @@ if (app) {
   const watchMatch = path.match(/^\/watch\/([^/]+)\/(.+)\/([^/]+)\/?$/);
 
   if (detailMatch) {
-    renderDetail(decodeURIComponent(detailMatch[1]), decodeURIComponent(detailMatch[2]));
+    withTransition(function () {
+      return renderDetail(decodeURIComponent(detailMatch[1]), decodeURIComponent(detailMatch[2]));
+    });
   } else if (watchMatch) {
-    renderWatch(decodeURIComponent(watchMatch[1]), decodeURIComponent(watchMatch[2]), decodeURIComponent(watchMatch[3]));
+    withTransition(function () {
+      return renderWatch(decodeURIComponent(watchMatch[1]), decodeURIComponent(watchMatch[2]), decodeURIComponent(watchMatch[3]));
+    });
   }
+}
+
+// 页面切换过渡: 旧内容缩小远去 → 替换内容 → 新内容放大进入 (鸿蒙风格)
+function withTransition(renderFn) {
+  var main = document.querySelector('#app main');
+  if (!main || typeof main.animate !== 'function') { renderFn(); return; }
+  // exit: 由近到远
+  main.animate(
+    [
+      { opacity: 1, transform: 'scale(1)', filter: 'blur(0px)' },
+      { opacity: 0, transform: 'scale(0.92)', filter: 'blur(6px)' }
+    ],
+    { duration: 220, easing: 'cubic-bezier(0.4, 0, 0.2, 1)', fill: 'forwards' }
+  ).onfinish = function () {
+    Promise.resolve(renderFn()).then(function () {
+      var fresh = document.querySelector('#app main');
+      if (!fresh) return;
+      // enter: 由远到近
+      fresh.animate(
+        [
+          { opacity: 0, transform: 'scale(1.05)', filter: 'blur(6px)' },
+          { opacity: 1, transform: 'scale(1)', filter: 'blur(0px)' }
+        ],
+        { duration: 320, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'both' }
+      );
+      // 剧集网格错峰进入
+      var grids = fresh.querySelectorAll('.grid');
+      grids.forEach(function (g) {
+        Array.from(g.children).forEach(function (child, i) {
+          child.animate(
+            [
+              { opacity: 0, transform: 'translateY(14px) scale(0.96)' },
+              { opacity: 1, transform: 'translateY(0) scale(1)' }
+            ],
+            { duration: 380, delay: Math.min(i * 28, 400), easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'both' }
+          );
+        });
+      });
+    });
+  };
 }
 
 function esc(s) {
@@ -76,6 +123,7 @@ async function renderDetail(srcID, name) {
   const eps = await fetchJSON('/api/library/' + encodeURIComponent(srcID) + '/' + encodeURIComponent(name) + '/episodes');
   const lib = await fetchJSON('/api/library');
   const meta = lib && (lib.data || []).find(function (a) { return a.name === name && a.source_id === srcID; });
+  const title = (meta && meta.title) || name.split('/').pop();
 
   if (!eps) {
     app.innerHTML = '<div class="text-center py-20"><p class="text-text-muted text-lg">未找到该动漫目录</p><a href="/" class="brand-text mt-4 inline-block">返回首页</a></div>';
@@ -89,14 +137,14 @@ async function renderDetail(srcID, name) {
 
   var cover = meta && meta.cover
     ? meta.cover
-    : 'https://via.placeholder.com/480x640/082f49/22d3ee?text=' + encodeURIComponent(name.slice(0, 6));
+    : 'https://via.placeholder.com/480x640/dbeafe/0a6fd8?text=' + encodeURIComponent(name.slice(0, 6));
 
   app.innerHTML =
     '<main class="max-w-7xl mx-auto px-4 py-6 animate-fade-in">' +
       '<div class="flex flex-col md:flex-row gap-8 mb-10">' +
         '<div class="w-48 shrink-0"><img src="' + esc(cover) + '" alt="' + esc(name) + '" class="w-full rounded-2xl shadow-2xl border border-white/10" /></div>' +
         '<div class="glass rounded-3xl p-6 flex-1">' +
-          '<h1 class="text-2xl md:text-3xl font-bold mb-3">' + esc(name) + '</h1>' +
+          '<h1 class="text-2xl md:text-3xl font-bold mb-3">' + esc(title) + '</h1>' +
           '<div class="flex flex-wrap items-center gap-3 text-sm mb-4">' +
             '<span class="text-text-muted">' + (eps ? eps.length : 0) + ' 集</span>' +
             (meta && meta.year ? '<span class="tag-chip">' + meta.year + '</span>' : '') +
@@ -114,6 +162,7 @@ async function renderWatch(srcID, name, file) {
   const eps = await fetchJSON('/api/library/' + encodeURIComponent(srcID) + '/' + encodeURIComponent(name) + '/episodes');
   const lib = await fetchJSON('/api/library');
   const meta = lib && (lib.data || []).find(function (a) { return a.name === name && a.source_id === srcID; });
+  const title = (meta && meta.title) || name.split('/').pop();
 
   if (!eps || !eps.length) {
     app.innerHTML = '<div class="text-center py-20"><p class="text-text-muted">未找到该动漫目录</p></div>';
@@ -141,7 +190,7 @@ async function renderWatch(srcID, name, file) {
     return '<a href="/watch/' + encodeURIComponent(srcID) + '/' + encodeURIComponent(name) + '/' + encodeURIComponent(ep.file) + '/" class="' + cls + ' px-2.5 py-2 text-xs font-medium text-center truncate" title="' + esc(ep.file) + '">' + esc(ep.name) + '</a>';
   }).join('');
 
-  var title = current ? current.name : file;
+  var currentTitle = current ? current.name : file;
 
   app.innerHTML =
     '<main class="max-w-6xl mx-auto px-4 py-6 animate-fade-in">' +
@@ -149,7 +198,7 @@ async function renderWatch(srcID, name, file) {
         (videoSrc ? '<video controls autoplay class="w-full h-full"><source src="' + videoSrc + '" /></video>' : '<div class="flex items-center justify-center h-full text-text-muted">暂无视频源</div>') +
       '</div>' +
       '<div class="glass rounded-3xl p-5 flex flex-wrap items-center justify-between gap-3 mb-6"><div class="min-w-0">' +
-        '<h1 class="text-lg md:text-xl font-bold truncate">' + esc(name) + ' · ' + esc(title) + '</h1>' +
+        '<h1 class="text-lg md:text-xl font-bold truncate">' + esc(title) + ' · ' + esc(currentTitle) + '</h1>' +
         (current && current.size ? '<p class="text-text-muted text-xs mt-0.5">' + fmtSize(current.size) + ' · ' + esc(current.file) + '</p>' : '') +
       '</div><div class="flex gap-2">' +
         (prevEp ? '<a href="/watch/' + encodeURIComponent(srcID) + '/' + encodeURIComponent(name) + '/' + encodeURIComponent(prevEp.file) + '/" class="btn-glass text-sm">← ' + esc(prevEp.name) + '</a>' : '<span class="btn-glass text-sm opacity-40 cursor-default">← 上一集</span>') +

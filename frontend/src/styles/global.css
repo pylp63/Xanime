@@ -3,35 +3,39 @@
 @tailwind utilities;
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   X动漫 — 液态毛玻璃 · 统一主题 (Deep Navy + Cyan Aqua)
-   热门玻璃拟态配色（无紫色）: 深海军蓝画布 + 青色/天蓝极光 + 白色磨砂玻璃。
-   One theme, every page.
+   X动漫 — 液态玻璃 · 浅色系 (Apple iOS 26 / HarmonyOS / MagicOS 风格)
+   柔和浅底 + 白色半透明玻璃 + 透出的彩色光晕 (系统蓝/青/粉/橙)。
+   Light, airy, translucent — 手机系统默认观感。
    ═══════════════════════════════════════════════════════════════════════════ */
 
 :root {
-  /* Canvas & text */
-  --bg: #030e1a;
-  --text: #eef2ff;
-  --text-muted: rgba(203, 213, 225, 0.62);
+  /* Canvas & text — 浅色画布, 冷调柔白 */
+  --bg: #eef3fb;
+  --text: #101828;
+  --text-muted: rgba(16, 24, 40, 0.55);
 
-  /* Accent — indigo → violet (the signature glassmorphism gradient) */
-  --accent-from: #06b6d4;
-  --accent-to: #0ea5e9;
-  --accent: #22d3ee;
+  /* Accent — iOS 系统蓝 → 青 */
+  --accent-from: #0a84ff;
+  --accent-to: #64d2ff;
+  --accent: #0a84ff;
   --on-accent: #ffffff;
-  --accent-glow: rgba(6, 182, 212, 0.40);
-  --accent-ring: rgba(34, 211, 238, 0.22);
+  --accent-glow: rgba(10, 132, 255, 0.35);
+  --accent-ring: rgba(10, 132, 255, 0.18);
 
-  /* Glass surfaces — canonical values: white fill + blur + saturate */
-  --glass-bg: rgba(255, 255, 255, 0.09);
-  --glass-bg-strong: rgba(255, 255, 255, 0.14);
-  --glass-bg-subtle: rgba(255, 255, 255, 0.05);
-  --glass-border: rgba(255, 255, 255, 0.16);
-  --glass-border-strong: rgba(255, 255, 255, 0.30);
-  --glass-highlight: rgba(255, 255, 255, 0.45);
-  --nav-bg: rgba(3, 14, 26, 0.55);
+  /* 真透明玻璃 — 白色高模糊 (浅色模式的 Control Center 配方) */
+  --glass-bg: rgba(255, 255, 255, 0.42);
+  --glass-bg-strong: rgba(255, 255, 255, 0.58);
+  --glass-bg-subtle: rgba(255, 255, 255, 0.30);
+  --glass-border: rgba(255, 255, 255, 0.85);
+  --glass-border-strong: rgba(255, 255, 255, 1);
+  --glass-highlight: rgba(255, 255, 255, 0.95);
+  --nav-bg: rgba(255, 255, 255, 0.46);
 
-  color-scheme: dark;
+  /* 柔和蓝灰阴影 (浅色模式的深度感) */
+  --shadow-soft: 0 12px 40px rgba(30, 60, 120, 0.10);
+  --shadow-lift: 0 20px 52px rgba(30, 60, 120, 0.16);
+
+  color-scheme: light;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -40,87 +44,130 @@ html { background: var(--bg); }
 
 body {
   color: var(--text);
-  font-family: "Inter", "Noto Sans SC", system-ui, -apple-system, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "HarmonyOS Sans SC", "MiSans",
+    "Inter", "Noto Sans SC", system-ui, sans-serif;
   min-height: 100vh;
   background-color: var(--bg);
-  /* Rich aurora canvas — glass is invisible on flat backgrounds, so the
-     indigo/violet/cyan glow behind the frosted panels is the whole point. */
-  background-image:
-    radial-gradient(ellipse 80% 55% at 8% -12%, rgba(6, 182, 212, 0.26), transparent 62%),
-    radial-gradient(ellipse 60% 45% at 96% 4%, rgba(14, 165, 233, 0.22), transparent 62%),
-    radial-gradient(ellipse 55% 42% at 88% 96%, rgba(13, 148, 136, 0.14), transparent 60%),
-    radial-gradient(ellipse 50% 40% at 4% 88%, rgba(56, 189, 248, 0.10), transparent 60%);
-  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
+
+/* ─── 流动彩色光晕 — 玻璃背后透出的颜色 (系统壁纸感) ──────────────────── */
+
+.liquid-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+}
+.liquid-bg i {
+  position: absolute;
+  display: block;
+  border-radius: 50%;
+  filter: blur(64px);
+  will-change: transform;
+}
+.liquid-bg i:nth-child(1) {
+  width: 55vmax; height: 55vmax;
+  left: -12vmax; top: -20vmax;
+  background: radial-gradient(circle, rgba(10, 132, 255, 0.48), transparent 62%);
+  animation: drift1 26s ease-in-out infinite alternate;
+}
+.liquid-bg i:nth-child(2) {
+  width: 48vmax; height: 48vmax;
+  right: -14vmax; top: 16vh;
+  background: radial-gradient(circle, rgba(100, 210, 255, 0.52), transparent 62%);
+  animation: drift2 32s ease-in-out infinite alternate;
+}
+.liquid-bg i:nth-child(3) {
+  width: 42vmax; height: 42vmax;
+  left: 22vw; bottom: -20vmax;
+  background: radial-gradient(circle, rgba(255, 105, 150, 0.30), transparent 62%);
+  animation: drift3 38s ease-in-out infinite alternate;
+}
+.liquid-bg i:nth-child(4) {
+  width: 36vmax; height: 36vmax;
+  right: 18vw; bottom: -14vmax;
+  background: radial-gradient(circle, rgba(255, 176, 32, 0.22), transparent 62%);
+  animation: drift1 44s ease-in-out infinite alternate-reverse;
+}
+@keyframes drift1 { to { transform: translate(9vmax, 7vmax) scale(1.15); } }
+@keyframes drift2 { to { transform: translate(-8vmax, 10vmax) scale(0.92); } }
+@keyframes drift3 { to { transform: translate(-10vmax, -8vmax) scale(1.18); } }
 
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.26); }
+::-webkit-scrollbar-thumb { background: rgba(16, 24, 40, 0.18); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(16, 24, 40, 0.30); }
 
-/* ─── Glass surface primitives ──────────────────────────────────────────── */
+/* ─── 玻璃面板 — 白色半透明 · 高模糊 · 内高光 ─────────────────────────── */
 
 .glass {
   position: relative;
   background: var(--glass-bg);
-  -webkit-backdrop-filter: blur(18px) saturate(170%);
-  backdrop-filter: blur(18px) saturate(170%);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  backdrop-filter: blur(40px) saturate(200%);
   border: 1px solid var(--glass-border);
+  border-radius: 24px;
   box-shadow:
-    0 8px 32px rgba(2, 8, 20, 0.35),
-    inset 0 1px 0 var(--glass-highlight);
+    var(--shadow-soft),
+    inset 0 1px 0 var(--glass-highlight),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.25);
   overflow: hidden;
 }
 
-/* Liquid specular streak — the signature highlight that sweeps on hover */
+/* 液态高光 — 悬停时掠过的镜面反光 */
 .glass::before {
   content: "";
   position: absolute;
   inset: 0;
   pointer-events: none;
   background:
-    linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.08) 45%, rgba(255, 255, 255, 0.16) 50%, rgba(255, 255, 255, 0.08) 55%, transparent 60%);
+    linear-gradient(105deg, transparent 42%, rgba(255, 255, 255, 0.38) 47%, rgba(255, 255, 255, 0.65) 50%, rgba(255, 255, 255, 0.38) 53%, transparent 58%);
   opacity: 0;
-  transition: opacity 0.4s ease;
+  transition: opacity 0.45s ease;
 }
 
-/* Glass input fields */
+/* 玻璃输入框 */
 .glass-input {
   width: 100%;
-  background: var(--glass-bg-subtle);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
-  border: 1px solid var(--glass-border);
-  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.24);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  backdrop-filter: blur(16px) saturate(150%);
+  border: 1px solid rgba(16, 24, 40, 0.10);
+  border-radius: 16px;
   padding: 0.65rem 1rem;
   color: var(--text);
   outline: none;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 .glass-input::placeholder { color: var(--text-muted); }
 .glass-input:focus {
-  border-color: rgba(34, 211, 238, 0.55);
-  background: var(--glass-bg);
+  border-color: rgba(10, 132, 255, 0.55);
+  background: var(--glass-bg-strong);
   box-shadow: 0 0 0 4px var(--accent-ring);
 }
 .glass-input option {
-  color: #0b1020;
+  color: #101828;
   background: #ffffff;
 }
 
-/* Primary CTA — liquid indigo→violet gradient pill */
+/* 主按钮 — iOS 蓝→青渐变胶囊 */
 .btn-liquid {
   position: relative;
   background: linear-gradient(135deg, var(--accent-from) 0%, var(--accent-to) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.28);
+  border: none;
   color: var(--on-accent);
-  border-radius: 14px;
+  border-radius: 16px;
   padding: 0.65rem 1.5rem;
   font-weight: 600;
+  letter-spacing: 0.01em;
   transition: transform 0.15s ease, box-shadow 0.25s ease, filter 0.2s ease;
   box-shadow:
-    0 4px 20px var(--accent-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    0 8px 24px var(--accent-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
   overflow: hidden;
 }
 .btn-liquid::after {
@@ -128,7 +175,7 @@ body {
   position: absolute;
   top: 0; left: -60%;
   width: 40%; height: 100%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.38), transparent);
   transform: skewX(-20deg);
   animation: liquidSheen 3.2s ease-in-out infinite;
 }
@@ -138,138 +185,138 @@ body {
   100% { left: 130%; }
 }
 .btn-liquid:hover {
-  transform: translateY(-1px);
-  filter: brightness(1.12);
-  box-shadow: 0 6px 28px var(--accent-glow), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transform: translateY(-1px) scale(1.01);
+  filter: brightness(1.05);
+  box-shadow: 0 10px 32px var(--accent-glow), inset 0 1px 0 rgba(255, 255, 255, 0.45);
 }
-.btn-liquid:active { transform: translateY(0); }
+.btn-liquid:active { transform: scale(0.98); }
 .btn-liquid:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
 
-/* Secondary (ghost glass) button */
+/* 次级按钮 — 白玻璃胶囊 */
 .btn-glass {
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
-  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.35);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid rgba(16, 24, 40, 0.10);
   color: var(--text);
-  border-radius: 14px;
+  border-radius: 16px;
   padding: 0.55rem 1.25rem;
   font-weight: 500;
   transition: all 0.2s ease;
+  box-shadow: inset 0 1px 0 var(--glass-highlight), 0 2px 10px rgba(30, 60, 120, 0.06);
 }
 .btn-glass:hover {
-  background: var(--glass-bg-strong);
-  border-color: var(--glass-border-strong);
+  background: rgba(255, 255, 255, 0.55);
+  border-color: rgba(16, 24, 40, 0.18);
 }
+.btn-glass:active { transform: scale(0.97); }
 
-/* Danger glass button (semantic red for destructive actions) */
+/* 危险按钮 (语义红) */
 .btn-danger {
-  background: rgba(244, 63, 94, 0.14);
-  border: 1px solid rgba(244, 63, 94, 0.35);
-  color: #fda4af;
-  border-radius: 14px;
+  background: rgba(255, 59, 48, 0.10);
+  border: 1px solid rgba(255, 59, 48, 0.30);
+  color: #e0271b;
+  border-radius: 16px;
   padding: 0.55rem 1.25rem;
   font-weight: 500;
   transition: all 0.2s ease;
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
 }
 .btn-danger:hover {
-  background: rgba(244, 63, 94, 0.28);
-  color: #fff;
+  background: rgba(255, 59, 48, 0.18);
+  color: #b81d13;
 }
 
-/* ─── Brand ─────────────────────────────────────────────────────────────── */
+/* ─── 品牌 ─────────────────────────────────────────────────────────────── */
 
 .logo-mark {
-  width: 32px; height: 32px;
-  border-radius: 10px;
+  width: 34px; height: 34px;
+  border-radius: 11px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: linear-gradient(135deg, var(--accent-from), var(--accent-to));
   color: #fff;
   font-weight: 800;
-  font-size: 16px;
-  letter-spacing: -0.02em;
-  box-shadow: 0 2px 14px var(--accent-glow), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  font-size: 17px;
+  box-shadow: 0 4px 16px var(--accent-glow), inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 .brand-text {
   font-weight: 800;
   letter-spacing: -0.01em;
-  background: linear-gradient(120deg, #a5f3fc, #67e8f9 55%, #38bdf8);
+  background: linear-gradient(120deg, #0a84ff, #0a6fd8 55%, #0ab3ff);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
   color: transparent;
 }
 
-/* ─── Component glass ───────────────────────────────────────────────────── */
+/* ─── 组件 ─────────────────────────────────────────────────────────────── */
 
-/* Floating glass navbar */
+/* 悬浮玻璃导航 */
 .glass-nav {
   background: var(--nav-bg);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
-  backdrop-filter: blur(28px) saturate(180%);
-  border-bottom: 1px solid var(--glass-border);
-  box-shadow: 0 4px 30px rgba(2, 8, 20, 0.30), inset 0 1px 0 var(--glass-highlight);
+  -webkit-backdrop-filter: blur(44px) saturate(200%);
+  backdrop-filter: blur(44px) saturate(200%);
+  border-bottom: 1px solid rgba(16, 24, 40, 0.07);
+  box-shadow: 0 4px 24px rgba(30, 60, 120, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
-/* Anime card — liquid glass slab */
+/* 动漫卡片 — 白玻璃片, 悬浮升起 */
 .xanime-card {
   position: relative;
   background: var(--glass-bg);
-  -webkit-backdrop-filter: blur(16px) saturate(150%);
-  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(36px) saturate(190%);
+  backdrop-filter: blur(36px) saturate(190%);
   border: 1px solid var(--glass-border);
-  border-radius: 18px;
+  border-radius: 22px;
   overflow: hidden;
-  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s ease, border-color 0.35s ease;
-  box-shadow: 0 4px 24px rgba(2, 8, 20, 0.30), inset 0 1px 0 var(--glass-highlight);
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.4s ease, border-color 0.4s ease;
+  box-shadow:
+    0 8px 28px rgba(30, 60, 120, 0.10),
+    inset 0 1px 0 var(--glass-highlight);
 }
 .xanime-card:hover {
-  transform: translateY(-6px);
-  border-color: rgba(103, 232, 249, 0.45);
+  transform: translateY(-6px) scale(1.015);
+  border-color: var(--glass-border-strong);
   box-shadow:
-    0 18px 48px rgba(2, 8, 20, 0.45),
-    0 0 32px var(--accent-glow),
+    var(--shadow-lift),
+    0 0 36px rgba(10, 132, 255, 0.15),
     inset 0 1px 0 var(--glass-highlight);
 }
 .xanime-card:hover::before { opacity: 1; }
 
-/* Badges over cover art — dark chip, readable on any image */
+/* 封面上的徽章 — 深色半透明保证图片上可读 */
 .glass-chip {
-  background: rgba(2, 8, 20, 0.55);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.20);
+  background: rgba(16, 24, 40, 0.45);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  backdrop-filter: blur(14px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.30);
   color: #fff;
 }
 .glass-chip-accent {
   background: linear-gradient(135deg, var(--accent-from), var(--accent-to));
-  border: 1px solid rgba(255, 255, 255, 0.30);
+  border: 1px solid rgba(255, 255, 255, 0.35);
   color: #fff;
-  box-shadow: 0 2px 12px var(--accent-glow);
+  box-shadow: 0 4px 16px var(--accent-glow);
 }
 
-/* Small info tag under card titles */
+/* 卡片下的小标签 */
 .tag-chip {
-  background: rgba(6, 182, 212, 0.14);
-  border: 1px solid rgba(34, 211, 238, 0.30);
-  color: #a5f3fc;
+  background: rgba(10, 132, 255, 0.10);
+  border: 1px solid rgba(10, 132, 255, 0.22);
+  color: #0a6fd8;
   border-radius: 8px;
   padding: 1px 7px;
   font-size: 12px;
 }
 
-/* Rating star — amber reads instantly on glass */
-.star { color: #fbbf24; font-weight: 700; }
-
-/* Category filter pills */
+/* 分类筛选胶囊 */
 .filter-pill {
-  background: var(--glass-bg-subtle);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
+  background: rgba(255, 255, 255, 0.28);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  backdrop-filter: blur(16px) saturate(150%);
   border: 1px solid transparent;
   color: var(--text-muted);
   border-radius: 999px;
@@ -277,43 +324,45 @@ body {
   font-size: 0.875rem;
   font-weight: 500;
   transition: all 0.25s ease;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 .filter-pill:hover {
-  background: var(--glass-bg);
-  border-color: var(--glass-border);
+  background: var(--glass-bg-strong);
+  border-color: rgba(16, 24, 40, 0.10);
   color: var(--text);
 }
 .filter-pill.active {
   background: linear-gradient(135deg, var(--accent-from), var(--accent-to));
-  border-color: rgba(255, 255, 255, 0.30);
+  border-color: rgba(255, 255, 255, 0.35);
   color: #fff;
-  box-shadow: 0 2px 16px var(--accent-glow);
+  box-shadow: 0 4px 20px var(--accent-glow), inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
-/* Episode number buttons */
+/* 剧集按钮 */
 .episode-btn {
   transition: all 0.2s ease;
-  background: var(--glass-bg-subtle);
-  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.26);
+  border: 1px solid rgba(16, 24, 40, 0.08);
   color: var(--text);
-  border-radius: 12px;
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
+  border-radius: 14px;
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  backdrop-filter: blur(14px) saturate(150%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
 }
 .episode-btn:hover {
   background: var(--glass-bg-strong);
-  border-color: rgba(103, 232, 249, 0.50);
-  color: #fff;
+  border-color: rgba(10, 132, 255, 0.35);
+  color: #0a6fd8;
 }
 .episode-btn.active {
   background: linear-gradient(135deg, var(--accent-from), var(--accent-to));
   color: #fff;
   font-weight: 600;
-  border-color: rgba(255, 255, 255, 0.30);
-  box-shadow: 0 4px 16px var(--accent-glow);
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 4px 20px var(--accent-glow), inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
-/* Video player frame */
+/* 播放器边框 */
 .video-container {
   position: relative;
   width: 100%;
@@ -321,10 +370,13 @@ body {
   margin: 0 auto;
   aspect-ratio: 16/9;
   background: #000;
-  border-radius: 22px;
+  border-radius: 24px;
   overflow: hidden;
   border: 1px solid var(--glass-border);
-  box-shadow: 0 24px 64px rgba(2, 8, 20, 0.55), 0 0 40px rgba(6, 182, 212, 0.14), inset 0 1px 0 var(--glass-highlight);
+  box-shadow:
+    var(--shadow-lift),
+    0 0 48px rgba(10, 132, 255, 0.10),
+    inset 0 1px 0 var(--glass-highlight);
 }
 .video-container video {
   width: 100%;
@@ -332,40 +384,41 @@ body {
   object-fit: contain;
 }
 
-/* Storage type badges — one hue family, weight-coded */
+/* 存储源类型徽章 */
 .src-badge { font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.6rem; border-radius: 999px; letter-spacing: 0.05em; }
-.src-badge.local { background: rgba(56, 189, 248, 0.14); color: #7dd3fc; border: 1px solid rgba(56, 189, 248, 0.35); }
-.src-badge.nfs, .src-badge.nas { background: rgba(56, 189, 248, 0.14); color: #7dd3fc; border: 1px solid rgba(56, 189, 248, 0.35); }
-.src-badge.s3 { background: rgba(251, 191, 36, 0.13); color: #fcd34d; border: 1px solid rgba(251, 191, 36, 0.35); }
+.src-badge.local { background: rgba(100, 210, 255, 0.20); color: #0a7ea4; border: 1px solid rgba(100, 210, 255, 0.45); }
+.src-badge.nfs, .src-badge.nas { background: rgba(10, 132, 255, 0.12); color: #0a6fd8; border: 1px solid rgba(10, 132, 255, 0.30); }
+.src-badge.s3 { background: rgba(255, 159, 10, 0.14); color: #b25e00; border: 1px solid rgba(255, 159, 10, 0.35); }
 
-/* Selected storage type card */
+/* 选中的存储类型卡片 */
 .type-card[data-selected="true"] {
-  border-color: rgba(103, 232, 249, 0.60) !important;
-  box-shadow: 0 0 24px var(--accent-ring) !important;
+  border-color: rgba(10, 132, 255, 0.55) !important;
+  box-shadow: 0 0 28px var(--accent-ring), inset 0 1px 0 var(--glass-highlight) !important;
+  background: var(--glass-bg-strong) !important;
 }
 
-/* Toast notification */
+/* Toast */
 .toast {
   position: fixed;
   top: 84px; right: 24px;
   z-index: 100;
-  background: rgba(3, 14, 26, 0.72);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
-  backdrop-filter: blur(20px) saturate(160%);
-  border: 1px solid var(--glass-border-strong);
-  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.5);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  border-radius: 18px;
   padding: 0.85rem 1.25rem;
   color: var(--text);
-  box-shadow: 0 12px 40px rgba(2, 8, 20, 0.4), inset 0 1px 0 var(--glass-highlight);
-  animation: toastIn 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  box-shadow: var(--shadow-lift), inset 0 1px 0 var(--glass-highlight);
+  animation: toastIn 0.4s cubic-bezier(0.22, 1, 0.36, 1);
   max-width: 360px;
 }
 @keyframes toastIn {
-  from { opacity: 0; transform: translateX(24px) scale(0.96); }
+  from { opacity: 0; transform: translateX(24px) scale(0.95); }
   to   { opacity: 1; transform: translateX(0) scale(1); }
 }
-.toast.ok { border-color: rgba(52, 211, 153, 0.55); }
-.toast.err { border-color: rgba(244, 63, 94, 0.55); }
+.toast.ok { border-color: rgba(52, 199, 89, 0.55); }
+.toast.err { border-color: rgba(255, 59, 48, 0.45); }
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(16px); }
@@ -373,22 +426,79 @@ body {
 }
 .animate-fade-in { animation: fadeIn 0.4s ease; }
 
-/* Decorative floating blobs (login hero) */
+/* 登录页装饰光晕 (叠加在全局光晕上) */
 .aurora-blob {
   position: absolute;
   border-radius: 50%;
-  filter: blur(70px);
+  filter: blur(80px);
   pointer-events: none;
-  animation: blobDrift 14s ease-in-out infinite alternate;
+  animation: blobDrift 16s ease-in-out infinite alternate;
 }
-.aurora-blob.blob-cyan { background: rgba(6, 182, 212, 0.28); }
-.aurora-blob.blob-sky { background: rgba(14, 165, 233, 0.24); }
+.aurora-blob.blob-indigo { background: rgba(10, 132, 255, 0.22); }
+.aurora-blob.blob-violet { background: rgba(100, 210, 255, 0.25); }
 @keyframes blobDrift {
   from { transform: translate(0, 0) scale(1); }
   to   { transform: translate(30px, -24px) scale(1.12); }
 }
 
+/* 降级: 不支持 backdrop-filter 时用不透明面板保证可读性 */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass, .glass-nav, .btn-glass, .episode-btn, .filter-pill, .toast { background: rgba(255, 255, 255, 0.96); }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .btn-liquid::after, .aurora-blob { animation: none; }
+  .btn-liquid::after, .aurora-blob, .liquid-bg i { animation: none; }
   .animate-fade-in { animation: none; }
+}
+
+
+/* ═══ 页面切换过渡 — 鸿蒙解锁式"由近到远/由远到近" ═══════════════════════════
+   SPA 路由变化时: 旧内容 scale(1)→scale(.92) 淡出, 新内容 scale(1.04)→scale(1) 进入。
+   原生 <a> 整页跳转用 View Transitions API (Chrome/Edge) + CSS 兜底。 */
+
+@keyframes pageExit {
+  from { opacity: 1; transform: scale(1); filter: blur(0); }
+  to   { opacity: 0; transform: scale(0.92); filter: blur(6px); }
+}
+@keyframes pageEnter {
+  from { opacity: 0; transform: scale(1.05); filter: blur(6px); }
+  to   { opacity: 1; transform: scale(1); filter: blur(0); }
+}
+@keyframes softEnter {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* 整页容器动画 (body 级) */
+html.pt-exit > body { animation: pageExit 0.26s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+html.pt-enter > body { animation: pageEnter 0.34s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* SPA 内容区切换 (#app 内重渲染) */
+.app-exit { animation: pageExit 0.26s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+.app-enter { animation: pageEnter 0.34s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* 列表/卡片级内容进入 (错峰) */
+.stagger-in > * { animation: softEnter 0.42s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.stagger-in > *:nth-child(1) { animation-delay: 0.02s; }
+.stagger-in > *:nth-child(2) { animation-delay: 0.05s; }
+.stagger-in > *:nth-child(3) { animation-delay: 0.08s; }
+.stagger-in > *:nth-child(4) { animation-delay: 0.11s; }
+.stagger-in > *:nth-child(5) { animation-delay: 0.14s; }
+.stagger-in > *:nth-child(6) { animation-delay: 0.17s; }
+.stagger-in > *:nth-child(7) { animation-delay: 0.20s; }
+.stagger-in > *:nth-child(8) { animation-delay: 0.23s; }
+.stagger-in > *:nth-child(n+9) { animation-delay: 0.26s; }
+
+/* View Transitions API: 原生整页跳转的平滑缩放 (Chrome 111+/鸿蒙内核同源) */
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root) {
+    animation: pageExit 0.24s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+  ::view-transition-new(root) {
+    animation: pageEnter 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.pt-exit > body, html.pt-enter > body, .app-exit, .app-enter, .stagger-in > * { animation: none; }
 }

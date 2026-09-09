@@ -8,10 +8,44 @@ import '../styles/global.css';
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>X动漫 — 在线动漫播放平台</title>
-  <meta name="description" content="X动漫 — 高画质动漫视频在线播放，极速加载" />
+  <meta name="description" content="X动漫 — 个人媒体库，实时扫描存储源目录" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <script is:inline>
+    // 整页跳转过渡: 拦截站内 <a>, 播放"由近到远"退出动画后再跳转;
+    // 新页面载入时播放"由远到近"进入动画。支持 View Transitions 的浏览器
+    // 优先走原生 API, 其余用 CSS class 兜底。
+    (function () {
+      var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      // 进入动画 (每个新页面)
+      if (!reduce) {
+        document.documentElement.classList.add('pt-enter');
+        document.addEventListener('animationend', function (e) {
+          if (e.target === document.body) document.documentElement.classList.remove('pt-enter');
+        });
+        setTimeout(function () { document.documentElement.classList.remove('pt-enter'); }, 500);
+      }
+      // 退出动画 (点击站内链接)
+      document.addEventListener('click', function (e) {
+        if (reduce || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey) return;
+        var a = e.target.closest && e.target.closest('a[href]');
+        if (!a) return;
+        var href = a.getAttribute('href');
+        if (!href || href.charAt(0) === '#' || /^(https?:|mailto:|javascript:)/.test(href)) return;
+        // SPA 客户端路由 (/xanime/…, /watch/…) 由 spa-client.js 处理, 不整页跳转
+        if (/^\/(xanime|watch)\//.test(href)) return;
+        var url;
+        try { url = new URL(a.href, location.href); } catch (err) { return; }
+        if (url.origin !== location.origin) return;
+        e.preventDefault();
+        document.documentElement.classList.add('pt-exit');
+        setTimeout(function () { window.location.href = a.href; }, 240);
+      }, true);
+    })();
+  </script>
 </head>
 <body class="text-text font-sans antialiased">
+  <!-- 液态玻璃背景: 柔和浅底 + 流动彩色光晕 (玻璃面板的颜色来源) -->
+  <div class="liquid-bg" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
   <slot />
   <script src="/spa-client.js" defer></script>
 </body>

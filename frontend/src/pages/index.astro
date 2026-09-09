@@ -2,13 +2,14 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 
 const search = Astro.url.searchParams.get('search') || '';
+const category = Astro.url.searchParams.get('category') || '';
 ---
 
 <BaseLayout>
   <div class="min-h-screen">
     <!-- Navbar -->
     <nav class="sticky top-0 z-50 glass-nav">
-      <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+      <div class="max-w-[1600px] mx-auto px-4 h-16 flex items-center justify-between">
         <a href="/" class="flex items-center gap-2">
           <span class="logo-mark">X</span>
           <span class="text-xl brand-text">X动漫</span>
@@ -30,36 +31,57 @@ const search = Astro.url.searchParams.get('search') || '';
       </div>
     </nav>
 
-    <div id="app">
-      <main class="max-w-7xl mx-auto px-4 py-8 animate-fade-in">
-        {!search && (
-          <div class="mb-10 text-center">
-            <h1 class="text-3xl md:text-4xl font-bold mb-3">探索新世界 • <span class="brand-text">X动漫</span></h1>
-            <p class="text-text-muted max-w-xl mx-auto">个人媒体库 · 实时扫描存储源目录</p>
-          </div>
-        )}
-        {search && (
-          <div class="mb-6">
-            <h2 class="text-lg">搜索结果：<span class="brand-text">"{search}"</span><span class="text-text-muted ml-2 text-sm" id="result-count"></span></h2>
-          </div>
-        )}
-        <div id="grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          <div class="col-span-full text-center py-20 text-text-muted text-lg">加载中…</div>
+    <div class="max-w-[1600px] mx-auto px-4 flex gap-6 items-start">
+      <!-- 左侧分类菜单 -->
+      <aside class="sticky top-20 w-52 shrink-0 hidden md:block py-8">
+        <div class="glass rounded-3xl p-3">
+          <div class="px-3 pt-2 pb-3 text-xs font-semibold text-text-muted tracking-wider">分类</div>
+          <nav id="sidebar-cats" class="space-y-1">
+            <div class="px-3 py-2 text-sm text-text-muted">加载中…</div>
+          </nav>
         </div>
-      </main>
+      </aside>
+
+      <!-- 内容区 -->
+      <div id="app" class="flex-1 min-w-0">
+        <main class="py-8 animate-fade-in">
+          {!search && !category && (
+            <div class="mb-8 text-center md:text-left">
+              <h1 class="text-3xl md:text-4xl font-bold mb-3">探索新世界 • <span class="brand-text">X动漫</span></h1>
+              <p class="text-text-muted max-w-xl">个人媒体库 · 实时扫描存储源目录</p>
+            </div>
+          )}
+          {(search || category) && (
+            <div class="mb-6 flex items-center gap-2 flex-wrap">
+              {category && <h2 class="text-lg">分类：<span class="brand-text">{category}</span></h2>}
+              {search && <h2 class="text-lg">搜索：<span class="brand-text">"{search}"</span></h2>}
+              <span class="text-text-muted text-sm" id="result-count"></span>
+            </div>
+          )}
+          <div id="grid" class="stagger-in grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            <div class="col-span-full text-center py-20 text-text-muted text-lg">加载中…</div>
+          </div>
+        </main>
+      </div>
     </div>
 
-    <footer class="text-center text-text-muted text-sm py-8 mt-16">
-      X动漫 &copy; {new Date().getFullYear()}
-    </footer>
+    <div class="pb-10"></div>
   </div>
 </BaseLayout>
 
 <script>
   (function () {
     const grid = document.getElementById('grid');
+    const catsNav = document.getElementById('sidebar-cats');
+    let userRole = 'user';
+    fetch('/api/me', { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (me) { if (me && me.role) userRole = me.role; })
+      .catch(function () {});
     const countEl = document.getElementById('result-count');
     const q = new URLSearchParams(window.location.search);
+    const activeCategory = q.get('category') || '';
+    const search = q.get('search') || '';
 
     function esc(s) {
       return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -67,10 +89,31 @@ const search = Astro.url.searchParams.get('search') || '';
       });
     }
 
+    function catHref(cat) {
+      const p = new URLSearchParams();
+      if (cat) p.set('category', cat);
+      if (search) p.set('search', search);
+      const qs = p.toString();
+      return qs ? '/?' + qs : '/';
+    }
+
+    function renderSidebar(categories) {
+      if (!catsNav) return;
+      const items = [{ key: '', label: '全部' }].concat(
+        categories.map(function (c) { return { key: c, label: c }; })
+      );
+      catsNav.innerHTML = items.map(function (it) {
+        const active = it.key === activeCategory;
+        const cls = active ? 'episode-btn active' : 'episode-btn';
+        return '<a href="' + catHref(it.key) + '" class="' + cls + ' block w-full text-left px-3 py-2 text-sm font-medium truncate">' +
+          (it.key === '' ? '✦ ' : '') + esc(it.label) + '</a>';
+      }).join('');
+    }
+
     async function load() {
       const params = new URLSearchParams();
-      const s = q.get('search');
-      if (s) params.set('search', s);
+      if (search) params.set('search', search);
+      if (activeCategory) params.set('category', activeCategory);
 
       let res;
       try {
@@ -90,30 +133,38 @@ const search = Astro.url.searchParams.get('search') || '';
       }
 
       const data = await res.json();
+      renderSidebar(data.categories || []);
       const list = data.data || [];
       if (countEl) countEl.textContent = '(' + (data.total || list.length) + ' 部)';
 
       if (list.length === 0) {
-        grid.innerHTML = '<div class="col-span-full glass rounded-3xl text-center py-16 px-6">' +
-          '<p class="text-text-muted text-lg">媒体库为空</p>' +
-          '<p class="text-text-muted text-sm mt-2">在存储源目录下创建动漫文件夹并放入视频文件即可，例如 <code class="text-cyan-300">/动漫目录/第01话.mp4</code></p>' +
-          '<a href="/settings/" class="btn-glass text-sm inline-block mt-4">管理存储源</a></div>';
+        var emptyHtml = '<div class="col-span-full glass rounded-3xl text-center py-16 px-6">' +
+          '<p class="text-text-muted text-lg">该分类暂无内容</p>';
+        if (userRole === 'admin') {
+          emptyHtml += '<p class="text-text-muted text-sm mt-2">在存储源目录下创建分类文件夹放入动漫即可，例如 <code>/data/Xanime/科幻/进击的巨人/第01话.mp4</code></p>' +
+            '<a href="/settings/" class="btn-glass text-sm inline-block mt-4">管理存储源</a>';
+        } else {
+          emptyHtml += '<p class="text-text-muted text-sm mt-2">请联系管理员添加资源</p>';
+        }
+        emptyHtml += '</div>';
+        grid.innerHTML = emptyHtml;
         return;
       }
 
       grid.innerHTML = list.map(function (a) {
         const href = '/xanime/' + encodeURIComponent(a.source_id) + '/' + encodeURIComponent(a.name) + '/';
-        const cover = a.cover || ('https://via.placeholder.com/480x640/082f49/22d3ee?text=' + encodeURIComponent(a.name.slice(0, 6)));
+        const cover = a.cover || ('https://via.placeholder.com/480x640/dbeafe/0a6fd8?text=' + encodeURIComponent((a.title || a.name).slice(0, 6)));
         return '<a href="' + href + '" class="xanime-card block group">' +
           '<div class="relative aspect-[3/4] overflow-hidden">' +
-            '<img src="' + esc(cover) + '" alt="' + esc(a.name) + '" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />' +
+            '<img src="' + esc(cover) + '" alt="' + esc(a.title) + '" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />' +
             '<div class="glass-chip absolute bottom-2 left-2 text-xs px-2 py-1 rounded-lg">' + a.episodes + ' 集</div>' +
           '</div>' +
           '<div class="p-3">' +
-            '<h3 class="font-semibold text-sm leading-tight line-clamp-2">' + esc(a.name) + '</h3>' +
+            '<h3 class="font-semibold text-sm leading-tight line-clamp-2">' + esc(a.title || a.name) + '</h3>' +
             '<div class="flex items-center gap-2 mt-1.5">' +
               (a.year ? '<span class="text-xs text-text-muted">' + a.year + '</span><span class="w-1 h-1 bg-text-muted rounded-full"></span>' : '') +
-              '<span class="tag-chip truncate max-w-[110px]">' + esc(a.source_name) + '</span>' +
+              (a.category ? '<span class="tag-chip truncate max-w-[110px]">' + esc(a.category) + '</span>' : '') +
+              '<span class="text-xs text-text-muted truncate max-w-[90px] ml-auto">' + esc(a.source_name) + '</span>' +
             '</div>' +
           '</div>' +
         '</a>';

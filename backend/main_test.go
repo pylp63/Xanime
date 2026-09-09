@@ -27,6 +27,8 @@ func setupTestServer(t *testing.T) *testServer {
 	// this one.
 	globalLimiter = newIPLimiter()
 	authLimiter = &ipLimiter{visitors: make(map[string]*rate.Limiter)}
+	// and make that IP unlimited so multi-login tests aren't throttled
+	authLimiter.visitors["192.0.2.1"] = rate.NewLimiter(rate.Inf, 0)
 
 	dir := t.TempDir()
 	t.Setenv("DB_DRIVER", "sqlite3")
@@ -127,7 +129,7 @@ func TestAddAndDeleteStorageSources(t *testing.T) {
 	s := setupTestServer(t)
 
 	// Add an NFS source.
-	code, body := s.auth("POST", "/api/storage-srcs",
+	code, body := s.auth("POST", "/api/admin/storage-srcs",
 		`{"name":"媒体库NFS","type":"nfs","video_path":"/mnt/nfsmedia"}`)
 	if code != 200 && code != 201 {
 		t.Fatalf("add nfs source: got %d %s", code, body)
@@ -150,7 +152,7 @@ func TestAddAndDeleteStorageSources(t *testing.T) {
 	}
 
 	// Deleting it must work and remove it from the list.
-	code, _ = s.auth("DELETE", "/api/storage-srcs/"+nfsID, "")
+	code, _ = s.auth("DELETE", "/api/admin/storage-srcs/"+nfsID, "")
 	if code != 200 {
 		t.Fatalf("delete nfs source: got %d", code)
 	}
@@ -165,14 +167,14 @@ func TestAddS3SourceRequiresCredentials(t *testing.T) {
 
 	// S3 without access/secret keys would generate broken presigned URLs —
 	// reject at creation time.
-	code, body := s.auth("POST", "/api/storage-srcs",
+	code, body := s.auth("POST", "/api/admin/storage-srcs",
 		`{"name":"minio","type":"s3","s3_endpoint":"http://10.10.10.9:9000","s3_bucket":"media","s3_region":"us-east-1"}`)
 	if code != 400 {
 		t.Fatalf("s3 without keys must be rejected, got %d %s", code, body)
 	}
 
 	// With full credentials it must be accepted.
-	code, _ = s.auth("POST", "/api/storage-srcs",
+	code, _ = s.auth("POST", "/api/admin/storage-srcs",
 		`{"name":"minio","type":"s3","s3_endpoint":"http://10.10.10.9:9000","s3_bucket":"media","s3_region":"us-east-1","s3_access_key":"AKIA1","s3_secret_key":"SECRET1"}`)
 	if code != 200 && code != 201 {
 		t.Fatalf("valid s3 source rejected: %d %s", code, body)
@@ -195,7 +197,7 @@ func TestCannotDeleteLastSource(t *testing.T) {
 	if len(listResp.Sources) != 1 {
 		t.Fatalf("expected exactly 1 seeded source, got %d", len(listResp.Sources))
 	}
-	code, _ := s.auth("DELETE", "/api/storage-srcs/"+listResp.Sources[0].ID, "")
+	code, _ := s.auth("DELETE", "/api/admin/storage-srcs/"+listResp.Sources[0].ID, "")
 	if code != 400 {
 		t.Fatalf("deleting the last source must be rejected, got %d", code)
 	}
@@ -213,9 +215,9 @@ func TestStreamFromMultipleSources(t *testing.T) {
 	os.WriteFile(filepath.Join(srcA, "ep1.mp4"), []byte("AAAA-video-bytes"), 0644)
 	os.WriteFile(filepath.Join(srcB, "ep2.mp4"), []byte("BBBB-video-bytes"), 0644)
 
-	code, body := s.auth("POST", "/api/storage-srcs", fmt.Sprintf(`{"name":"A","type":"local","video_path":%q}`, srcA))
+	code, body := s.auth("POST", "/api/admin/storage-srcs", fmt.Sprintf(`{"name":"A","type":"local","video_path":%q}`, srcA))
 	if code != 200 && code != 201 { t.Fatalf("add A: %d %s", code, body) }
-	code, body = s.auth("POST", "/api/storage-srcs", fmt.Sprintf(`{"name":"B","type":"nfs","video_path":%q}`, srcB))
+	code, body = s.auth("POST", "/api/admin/storage-srcs", fmt.Sprintf(`{"name":"B","type":"nfs","video_path":%q}`, srcB))
 	if code != 200 && code != 201 { t.Fatalf("add B: %d %s", code, body) }
 
 	var listResp struct {
@@ -265,7 +267,7 @@ func TestStreamToleratesLegacyVideosPrefix(t *testing.T) {
 
 	// Re-point the first source's VideoPath at root (simulating a configured
 	// volume) by adding a fresh source and using its ID.
-	code, body := s.auth("POST", "/api/storage-srcs", fmt.Sprintf(`{"name":"R","type":"local","video_path":%q}`, root))
+	code, body := s.auth("POST", "/api/admin/storage-srcs", fmt.Sprintf(`{"name":"R","type":"local","video_path":%q}`, root))
 	if code != 200 && code != 201 { t.Fatalf("add R: %d %s", code, body) }
 	_, body = s.auth("GET", "/api/storage-srcs", "")
 	var listResp struct {
@@ -311,7 +313,7 @@ func TestPresignLocalAndS3(t *testing.T) {
 	}
 
 	// S3: presign returns an absolute presigned URL with a signature.
-	code, _ = s.auth("POST", "/api/storage-srcs",
+	code, _ = s.auth("POST", "/api/admin/storage-srcs",
 		`{"name":"minio","type":"s3","s3_endpoint":"http://10.10.10.9:9000","s3_bucket":"media","s3_region":"us-east-1","s3_access_key":"AKIA1","s3_secret_key":"SECRET1"}`)
 	if code != 200 && code != 201 { t.Fatalf("add s3: %d", code) }
 	_, body = s.auth("GET", "/api/storage-srcs", "")
@@ -349,7 +351,7 @@ func TestStorageAPIRequiresAuth(t *testing.T) {
 	if code, _ := s.do("GET", "/api/storage-srcs", "", ""); code != 401 {
 		t.Fatalf("unauthenticated list must 401, got %d", code)
 	}
-	if code, _ := s.do("POST", "/api/storage-srcs", `{"type":"s3"}`, ""); code != 401 {
+	if code, _ := s.do("POST", "/api/admin/storage-srcs", `{"type":"s3"}`, ""); code != 401 {
 		t.Fatalf("unauthenticated add must 401, got %d", code)
 	}
 }
@@ -389,7 +391,7 @@ func TestCSPAllowsS3Media(t *testing.T) {
 // Sources persist across restarts (stored in the settings table).
 func TestSourcesPersistAcrossRestart(t *testing.T) {
 	s := setupTestServer(t)
-	code, _ := s.auth("POST", "/api/storage-srcs", `{"name":"nfs1","type":"nfs","video_path":"/mnt/nfs1"}`)
+	code, _ := s.auth("POST", "/api/admin/storage-srcs", `{"name":"nfs1","type":"nfs","video_path":"/mnt/nfs1"}`)
 	if code != 200 && code != 201 { t.Fatalf("add: %d", code) }
 
 	// Simulate restart: reload from DB into a fresh in-memory slice.
@@ -430,7 +432,7 @@ func TestLibraryScansRealDirectories(t *testing.T) {
 	os.WriteFile(filepath.Join(root, ".hidden", "x.mp4"), []byte("x"), 0644)
 	os.WriteFile(filepath.Join(root, "loose.mp4"), []byte("x"), 0644)
 
-	code, _ := s.auth("POST", "/api/storage-srcs", fmt.Sprintf(`{"name":"R","type":"local","video_path":%q}`, root))
+	code, _ := s.auth("POST", "/api/admin/storage-srcs", fmt.Sprintf(`{"name":"R","type":"local","video_path":%q}`, root))
 	if code != 200 && code != 201 { t.Fatalf("add source: %d", code) }
 
 	// ── list: only real anime dirs, with episode counts and cover flags
@@ -561,7 +563,7 @@ func TestLibraryFollowsSymlinksAndCollections(t *testing.T) {
 	// symlink: whole collection
 	os.Symlink(nfsRoot, filepath.Join(root, "NFS媒体库"))
 
-	code, _ := s.auth("POST", "/api/storage-srcs", fmt.Sprintf(`{"name":"R","type":"local","video_path":%q}`, root))
+	code, _ := s.auth("POST", "/api/admin/storage-srcs", fmt.Sprintf(`{"name":"R","type":"local","video_path":%q}`, root))
 	if code != 200 && code != 201 { t.Fatalf("add source: %d", code) }
 
 	// fetch the real source id (generated as local-<timestamp>)
@@ -585,13 +587,18 @@ func TestLibraryFollowsSymlinksAndCollections(t *testing.T) {
 	var libResp struct {
 		Data []struct {
 			Name     string `json:"name"`
+			Title    string `json:"title"`
+			Category string `json:"category"`
 			Episodes int    `json:"episodes"`
 		} `json:"data"`
+		Categories []string `json:"categories"`
 	}
 	json.Unmarshal([]byte(body), &libResp)
 
 	var giant, frieren *struct {
 		Name     string `json:"name"`
+		Title    string `json:"title"`
+		Category string `json:"category"`
 		Episodes int    `json:"episodes"`
 	}
 	for i := range libResp.Data {
@@ -606,6 +613,26 @@ func TestLibraryFollowsSymlinksAndCollections(t *testing.T) {
 	}
 	if frieren == nil {
 		t.Fatalf("collection anime not recognized (nested name): %s", body)
+	}
+
+	// display title = last path segment, no collection prefix
+	if frieren.Title != "葬送的芙莉莲" {
+		t.Fatalf("nested anime title should drop prefix, got %q", frieren.Title)
+	}
+	if frieren.Category != "NFS媒体库" {
+		t.Fatalf("nested anime category should be parent dir, got %q", frieren.Category)
+	}
+	if giant.Title != "进击的巨人" || giant.Category != "" {
+		t.Fatalf("top-level anime title/category wrong: %+v", giant)
+	}
+
+	// categories list is the configured semantic list (科幻/推理/…)
+	foundCat := false
+	for _, c := range libResp.Categories {
+		if c == "科幻" { foundCat = true }
+	}
+	if !foundCat {
+		t.Fatalf("configured categories missing 科幻: %v", libResp.Categories)
 	}
 
 	// episodes via nested name (contains a slash)
@@ -634,7 +661,7 @@ func TestLibrarySkipsDeadSymlinks(t *testing.T) {
 	// dead symlink: target does not exist
 	os.Symlink(filepath.Join(t.TempDir(), "nope"), filepath.Join(root, "死链动漫"))
 
-	code, _ := s.auth("POST", "/api/storage-srcs", fmt.Sprintf(`{"name":"R","type":"local","video_path":%q}`, root))
+	code, _ := s.auth("POST", "/api/admin/storage-srcs", fmt.Sprintf(`{"name":"R","type":"local","video_path":%q}`, root))
 	if code != 200 && code != 201 { t.Fatalf("add source: %d", code) }
 
 	code, body := s.auth("GET", "/api/library", "")
@@ -650,6 +677,200 @@ func TestLibrarySkipsDeadSymlinks(t *testing.T) {
 	code, _ = s.auth("GET", "/api/library/R/死链动漫/episodes", "")
 	if code != 404 && code != 400 {
 		t.Fatalf("dead link episodes should 404/400, got %d", code)
+	}
+}
+
+// ─── User accounts & permissions ──────────────────────────────────────────────
+
+// registerAndLogin creates a normal user and returns its token.
+func registerAndLogin(t *testing.T, s *testServer, username, password string) string {
+	t.Helper()
+	code, body := s.do("POST", "/api/auth/register", `{"username":"`+username+`","password":"`+password+`"}`, "")
+	if code != 201 && code != 200 {
+		t.Fatalf("register %s: got %d %s", username, code, body)
+	}
+	code, body = s.do("POST", "/api/auth/login", `{"username":"`+username+`","password":"`+password+`"}`, "")
+	if code != 200 {
+		t.Fatalf("login %s: got %d %s", username, code, body)
+	}
+	var resp struct{ Token string `json:"token"` }
+	json.Unmarshal([]byte(body), &resp)
+	if resp.Token == "" {
+		t.Fatal("no token for new user")
+	}
+	return resp.Token
+}
+
+func TestRegisterLoginNormalUser(t *testing.T) {
+	s := setupTestServer(t)
+
+	// register a fresh user
+	token := registerAndLogin(t, s, "alice", "alice-pass-123")
+	if token == "" { t.Fatal("empty token") }
+
+	// duplicate username rejected
+	code, _ := s.do("POST", "/api/auth/register", `{"username":"alice","password":"another-pass-1"}`, "")
+	if code != 409 {
+		t.Fatalf("duplicate register should 409, got %d", code)
+	}
+
+	// weak password rejected
+	code, _ = s.do("POST", "/api/auth/register", `{"username":"bob","password":"123"}`, "")
+	if code != 400 {
+		t.Fatalf("weak password should 400, got %d", code)
+	}
+
+	// normal user CAN read the library
+	code, body := s.do("GET", "/api/library", "", token)
+	if code != 200 { t.Fatalf("user library: %d %s", code, body) }
+}
+
+func TestUserChangesOwnPassword(t *testing.T) {
+	s := setupTestServer(t)
+	token := registerAndLogin(t, s, "carol", "carol-pass-123")
+
+	// change own password
+	code, body := s.do("PUT", "/api/auth/password", `{"old_password":"carol-pass-123","new_password":"new-pass-456"}`, token)
+	if code != 200 {
+		t.Fatalf("change password: got %d %s", code, body)
+	}
+	// old password no longer works
+	code, _ = s.do("POST", "/api/auth/login", `{"username":"carol","password":"carol-pass-123"}`, "")
+	if code != 401 { t.Fatalf("old password should fail, got %d", code) }
+	// new password works
+	code, _ = s.do("POST", "/api/auth/login", `{"username":"carol","password":"new-pass-456"}`, "")
+	if code != 200 { t.Fatalf("new password should work, got %d", code) }
+
+	// wrong old password rejected
+	code, _ = s.do("PUT", "/api/auth/password", `{"old_password":"WRONG","new_password":"x-pass-789"}`, token)
+	if code != 400 && code != 401 {
+		t.Fatalf("wrong old password should 400/401, got %d", code)
+	}
+}
+
+func TestAdminResetsUserPassword(t *testing.T) {
+	s := setupTestServer(t)
+	registerAndLogin(t, s, "dave", "dave-pass-123")
+
+	// admin resets dave's password
+	code, body := s.auth("POST", "/api/admin/users/dave/password", `{"new_password":"admin-set-999"}`)
+	if code != 200 {
+		t.Fatalf("admin reset: got %d %s", code, body)
+	}
+	// dave logs in with the new password
+	code, _ = s.do("POST", "/api/auth/login", `{"username":"dave","password":"admin-set-999"}`, "")
+	if code != 200 { t.Fatalf("reset password login: %d", code) }
+
+	// a NORMAL user cannot reset someone's password
+	token := registerAndLogin(t, s, "eve", "eve-pass-1234")
+	code, _ = s.do("POST", "/api/admin/users/eve/password", `{"new_password":"hijack-123"}`, token)
+	if code != 403 && code != 401 {
+		t.Fatalf("non-admin reset must be forbidden, got %d", code)
+	}
+}
+
+// Normal users must not manage storage sources or settings; admin can.
+func TestNormalUserCannotManageStorage(t *testing.T) {
+	s := setupTestServer(t)
+	token := registerAndLogin(t, s, "frank", "frank-pass-123")
+
+	// user lists sources — allowed (read-only view)
+	code, _ := s.do("GET", "/api/storage-srcs", "", token)
+	if code != 200 { t.Fatalf("user list sources: %d", code) }
+
+	// user adds a source — forbidden
+	code, _ = s.do("POST", "/api/admin/storage-srcs", `{"name":"x","type":"local","video_path":"/tmp"}`, token)
+	if code != 403 && code != 401 {
+		t.Fatalf("user add source must be forbidden, got %d", code)
+	}
+	// user deletes a source — forbidden
+	code, _ = s.do("DELETE", "/api/admin/storage-srcs/local", "", token)
+	if code != 403 && code != 401 {
+		t.Fatalf("user delete source must be forbidden, got %d", code)
+	}
+
+	// admin still can
+	code, _ = s.auth("POST", "/api/admin/storage-srcs", `{"name":"adminsrc","type":"local","video_path":"/tmp/adm"}`)
+	if code != 200 && code != 201 { t.Fatalf("admin add source: %d", code) }
+}
+
+// /api/me reports the role so the frontend can gate the settings page.
+func TestMeReportsRole(t *testing.T) {
+	s := setupTestServer(t)
+
+	code, body := s.auth("GET", "/api/me", "")
+	if code != 200 { t.Fatalf("admin me: %d", code) }
+	if !strings.Contains(body, `"role":"admin"`) && !strings.Contains(body, `"role": "admin"`) {
+		t.Fatalf("admin me should report role admin: %s", body)
+	}
+
+	token := registerAndLogin(t, s, "grace", "grace-pass-123")
+	code, body = s.do("GET", "/api/me", "", token)
+	if code != 200 { t.Fatalf("user me: %d", code) }
+	if !strings.Contains(body, `"role":"user"`) && !strings.Contains(body, `"role": "user"`) {
+		t.Fatalf("user me should report role user: %s", body)
+	}
+}
+
+// Admin can list users; the list powers the admin password-reset UI.
+func TestAdminListsUsers(t *testing.T) {
+	s := setupTestServer(t)
+	registerAndLogin(t, s, "henry", "henry-pass-123")
+
+	code, body := s.auth("GET", "/api/admin/users", "")
+	if code != 200 { t.Fatalf("admin list users: %d", code) }
+	if !strings.Contains(body, "henry") || !strings.Contains(body, "admin") {
+		t.Fatalf("users list missing entries: %s", body)
+	}
+	// normal user cannot list users
+	token := registerAndLogin(t, s, "iris", "iris-pass-123")
+	code, _ = s.do("GET", "/api/admin/users", "", token)
+	if code != 403 && code != 401 {
+		t.Fatalf("user list users must be forbidden, got %d", code)
+	}
+}
+
+// Admin can delete a normal user; the admin account itself is protected,
+// and normal users cannot delete anyone.
+func TestAdminDeletesUser(t *testing.T) {
+	s := setupTestServer(t)
+	registerAndLogin(t, s, "jack", "jack-pass-123")
+	registerAndLogin(t, s, "kate", "kate-pass-123")
+
+	// admin deletes jack
+	code, body := s.auth("DELETE", "/api/admin/users/jack", "")
+	if code != 200 {
+		t.Fatalf("admin delete user: got %d %s", code, body)
+	}
+	// jack is gone from the list
+	code, body = s.auth("GET", "/api/admin/users", "")
+	if code != 200 || strings.Contains(body, `"jack"`) {
+		t.Fatalf("jack should be deleted: %s", body)
+	}
+	// jack can no longer log in
+	code, _ = s.do("POST", "/api/auth/login", `{"username":"jack","password":"jack-pass-123"}`, "")
+	if code != 401 { t.Fatalf("deleted user login must fail, got %d", code) }
+
+	// admin cannot delete itself
+	code, _ = s.auth("DELETE", "/api/admin/users/admin", "")
+	if code != 400 && code != 403 {
+		t.Fatalf("self-delete must be rejected, got %d", code)
+	}
+
+	// deleting a non-existent user → 404
+	code, _ = s.auth("DELETE", "/api/admin/users/ghost", "")
+	if code != 404 { t.Fatalf("ghost delete should 404, got %d", code) }
+
+	// a normal user cannot delete anyone
+	token := registerAndLogin(t, s, "lucy", "lucy-pass-123")
+	code, _ = s.do("DELETE", "/api/admin/users/kate", "", token)
+	if code != 403 && code != 401 {
+		t.Fatalf("user delete must be forbidden, got %d", code)
+	}
+	// kate survives
+	_, body = s.auth("GET", "/api/admin/users", "")
+	if !strings.Contains(body, "kate") {
+		t.Fatal("kate must still exist")
 	}
 }
 

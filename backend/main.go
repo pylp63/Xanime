@@ -56,6 +56,7 @@ type User struct {
 	Username string `json:"username"`
 	Password string `json:"-"`
 	Avatar   string `json:"avatar"`
+	Role     string `json:"role"`
 }
 
 var db *sql.DB
@@ -286,11 +287,12 @@ func createTables() {
 				id BIGSERIAL PRIMARY KEY,
 				username TEXT UNIQUE NOT NULL,
 				password TEXT NOT NULL,
-				avatar TEXT DEFAULT ''
+				avatar TEXT DEFAULT '',
+				role TEXT NOT NULL DEFAULT 'user'
 			);
 			CREATE INDEX IF NOT EXISTS idx_episodes_xanime ON episodes(xanime_id);
-		CREATE TABLE IF NOT EXISTS settings (
-			key TEXT PRIMARY KEY,
+			CREATE TABLE IF NOT EXISTS settings (
+				key TEXT PRIMARY KEY,
 			value TEXT DEFAULT ''
 		);
 		`)
@@ -320,7 +322,8 @@ func createTables() {
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
 				username TEXT UNIQUE NOT NULL,
 				password TEXT NOT NULL,
-				avatar TEXT DEFAULT ''
+				avatar TEXT DEFAULT '',
+				role TEXT NOT NULL DEFAULT 'user'
 			);
 			CREATE INDEX IF NOT EXISTS idx_episodes_xanime ON episodes(xanime_id);
 		CREATE TABLE IF NOT EXISTS settings (
@@ -332,6 +335,28 @@ func createTables() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// Migration: older DBs lack the users.role column — add and backfill.
+	migrate()
+}
+
+// migrate applies incremental schema changes for pre-existing databases.
+func migrate() {
+	if dbDriver == "sqlite3" {
+		var cnt int
+		if err := db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('users') WHERE name='role'").Scan(&cnt); err == nil && cnt == 0 {
+			log.Println("migrating: add users.role")
+			db.Exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'")
+		}
+	} else {
+		var cnt int
+		if err := db.QueryRow("SELECT COUNT(*) FROM information_schema.columns WHERE table_name='users' AND column_name='role'").Scan(&cnt); err == nil && cnt == 0 {
+			log.Println("migrating: add users.role")
+			db.Exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'")
+		}
+	}
+	// The seeded admin account is always role=admin.
+	db.Exec(fmt.Sprintf("UPDATE users SET role='admin' WHERE username=%s", placeh(1)), os.Getenv("ADMIN_USER"))
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
@@ -428,6 +453,7 @@ func register(c *gin.Context) {
 		Username string `json:"username" binding:"required,min=3,max=32"`
 		Password string `json:"password" binding:"required,min=6"`
 	}
+	// registrations are always normal users; admin is only the seeded account
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -443,7 +469,7 @@ func register(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "create failed"})
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"id": id, "username": req.Username, "token": generateToken(id)})
+	c.JSON(http.StatusCreated, gin.H{"id": id, "username": req.Username, "role": "user", "token": generateToken(id)})
 }
 
 func login(c *gin.Context) {
@@ -456,8 +482,8 @@ func login(c *gin.Context) {
 		return
 	}
 	var user User
-	err := db.QueryRow(fmt.Sprintf("SELECT id,username,password,avatar FROM users WHERE username=%s", placeh(1)), req.Username).
-		Scan(&user.ID, &user.Username, &user.Password, &user.Avatar)
+	err := db.QueryRow(fmt.Sprintf("SELECT id,username,password,avatar,role FROM users WHERE username=%s", placeh(1)), req.Username).
+		Scan(&user.ID, &user.Username, &user.Password, &user.Avatar, &user.Role)
 	if err != nil || !verifyPassword(user.Password, req.Password) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "bad credentials"})
 		return
@@ -473,7 +499,7 @@ func login(c *gin.Context) {
 		MaxAge:   72 * 3600,
 	})
 
-	c.JSON(http.StatusOK, gin.H{"id": user.ID, "username": user.Username, "avatar": user.Avatar, "token": token})
+	c.JSON(http.StatusOK, gin.H{"id": user.ID, "username": user.Username, "avatar": user.Avatar, "role": user.Role, "token": token})
 }
 
 // ─── Anime API ────────────────────────────────────────────────────────────────
@@ -650,13 +676,17 @@ var coverNames = map[string]bool{
 }
 
 // LibraryAnime is one anime = one real directory under a filesystem source.
+// Name is the full key (may be "Collection/Anime"), Title the display name
+// (last segment), Category the parent dir for sidebar filtering.
 type LibraryAnime struct {
-	Name     string `json:"name"`
-	SourceID string `json:"source_id"`
+	Name       string `json:"name"`
+	Title      string `json:"title"`
+	Category   string `json:"category"`
+	SourceID   string `json:"source_id"`
 	SourceName string `json:"source_name"`
-	Cover    string `json:"cover"`
-	Episodes int    `json:"episodes"`
-	Year     int    `json:"year"`
+	Cover      string `json:"cover"`
+	Episodes   int    `json:"episodes"`
+	Year       int    `json:"year"`
 }
 
 // LibraryEpisode is one episode = one real video file. Name is the file name
@@ -764,8 +794,15 @@ func scanSourceDir(src *StorageSource) []LibraryAnime {
 				if coverFile != "" {
 					cover = fmt.Sprintf("/api/library/%s/%s/cover", src.ID, relName)
 				}
+				title := e.Name()
+				category := ""
+				if baseRel != "" {
+					title = e.Name()
+					category = baseRel
+				}
 				out = append(out, LibraryAnime{
-					Name: relName, SourceID: src.ID, SourceName: src.Name,
+					Name: relName, Title: title, Category: category,
+					SourceID: src.ID, SourceName: src.Name,
 					Cover: cover, Episodes: epCount, Year: extractYear(e.Name()),
 				})
 				continue
@@ -780,10 +817,12 @@ func scanSourceDir(src *StorageSource) []LibraryAnime {
 	return out
 }
 
-// listLibrary handles GET /api/library[?search=] — scans every filesystem
-// source in real time; no DB rows involved.
+// listLibrary handles GET /api/library[?search=&category=] — scans every
+// filesystem source in real time; no DB rows involved. Also returns the
+// distinct category list (parent dirs) for the sidebar.
 func listLibrary(c *gin.Context) {
 	search := strings.ToLower(strings.TrimSpace(c.Query("search")))
+	category := strings.TrimSpace(c.Query("category"))
 	var data []LibraryAnime
 	for i := range storageSources {
 		src := &storageSources[i]
@@ -791,13 +830,15 @@ func listLibrary(c *gin.Context) {
 			continue // S3 listing requires a ListObjects call — filesystem only for now
 		}
 		for _, a := range scanSourceDir(src) {
-			if search == "" || strings.Contains(strings.ToLower(a.Name), search) {
+			matchSearch := search == "" || strings.Contains(strings.ToLower(a.Name), search) || strings.Contains(strings.ToLower(a.Title), search)
+			matchCat := category == "" || a.Category == category
+			if matchSearch && matchCat {
 				data = append(data, a)
 			}
 		}
 	}
 	if data == nil { data = []LibraryAnime{} }
-	c.JSON(http.StatusOK, gin.H{"data": data, "total": len(data)})
+	c.JSON(http.StatusOK, gin.H{"data": data, "total": len(data), "categories": getCategories()})
 }
 
 // libraryResource dispatches /api/library/:src/*rest: rest = "Name/episodes"
@@ -995,13 +1036,13 @@ func resolveVideoURL(v string) (*StorageSource, string) {
 func me(c *gin.Context) {
 	uid, _ := c.Get("user_id")
 	var u User
-	err := db.QueryRow(fmt.Sprintf("SELECT id,username,password,avatar FROM users WHERE id=%s", placeh(1)), uid).
-		Scan(&u.ID, &u.Username, &u.Password, &u.Avatar)
+	err := db.QueryRow(fmt.Sprintf("SELECT id,username,password,avatar,role FROM users WHERE id=%s", placeh(1)), uid).
+		Scan(&u.ID, &u.Username, &u.Password, &u.Avatar, &u.Role)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"id": u.ID, "username": u.Username, "avatar": u.Avatar})
+	c.JSON(http.StatusOK, gin.H{"id": u.ID, "username": u.Username, "avatar": u.Avatar, "role": u.Role})
 }
 
 func logout(c *gin.Context) {
@@ -1014,6 +1055,182 @@ func logout(c *gin.Context) {
 		MaxAge:   -1,
 	})
 	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// ─── Password management & admin user management ─────────────────────────────
+
+// changeOwnPassword handles PUT /api/auth/password (any logged-in user).
+func changeOwnPassword(c *gin.Context) {
+	var req struct {
+		OldPassword string `json:"old_password" binding:"required"`
+		NewPassword string `json:"new_password" binding:"required,min=6"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "新密码至少 6 位"})
+		return
+	}
+	uid, _ := c.Get("user_id")
+	var hash string
+	err := db.QueryRow(fmt.Sprintf("SELECT password FROM users WHERE id=%s", placeh(1)), uid).Scan(&hash)
+	if err != nil || !verifyPassword(hash, req.OldPassword) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "原密码错误"})
+		return
+	}
+	_, err = db.Exec(fmt.Sprintf("UPDATE users SET password=%s WHERE id=%s", placeh(1), placeh(2)),
+		hashPassword(req.NewPassword), uid)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "update failed"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// requireAdmin aborts with 403 unless the caller is the admin role.
+func requireAdmin() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		uid, _ := c.Get("user_id")
+		var role string
+		err := db.QueryRow(fmt.Sprintf("SELECT role FROM users WHERE id=%s", placeh(1)), uid).Scan(&role)
+		if err != nil || role != "admin" {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "需要管理员权限"})
+			return
+		}
+		c.Next()
+	}
+}
+
+// adminListUsers handles GET /api/admin/users.
+func adminListUsers(c *gin.Context) {
+	rows, err := db.Query("SELECT id,username,avatar,role FROM users ORDER BY id")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer rows.Close()
+	type userRow struct {
+		ID       int64  `json:"id"`
+		Username string `json:"username"`
+		Avatar   string `json:"avatar"`
+		Role     string `json:"role"`
+	}
+	users := []userRow{}
+	for rows.Next() {
+		var u userRow
+		rows.Scan(&u.ID, &u.Username, &u.Avatar, &u.Role)
+		users = append(users, u)
+	}
+	c.JSON(http.StatusOK, gin.H{"users": users})
+}
+
+// adminDeleteUser handles DELETE /api/admin/users/:username — removes a
+// normal user. The admin account itself cannot be deleted.
+func adminDeleteUser(c *gin.Context) {
+	username := c.Param("username")
+	uid, _ := c.Get("user_id")
+
+	var targetID int64
+	var role string
+	err := db.QueryRow(fmt.Sprintf("SELECT id,role FROM users WHERE username=%s", placeh(1)), username).Scan(&targetID, &role)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "用户不存在"})
+		return
+	}
+	if role == "admin" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "不能删除管理员账号"})
+		return
+	}
+	if targetID == toInt64(uid) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "不能删除自己"})
+		return
+	}
+	_, err = db.Exec(fmt.Sprintf("DELETE FROM users WHERE id=%s", placeh(1)), targetID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "delete failed"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// toInt64 coerces a gin context value to int64.
+func toInt64(v interface{}) int64 {
+	if n, ok := v.(int64); ok {
+		return n
+	}
+	return -1
+}
+
+// adminResetUserPassword handles POST /api/admin/users/:username/password.
+func adminResetUserPassword(c *gin.Context) {
+	username := c.Param("username")
+	var req struct {
+		NewPassword string `json:"new_password" binding:"required,min=6"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "新密码至少 6 位"})
+		return
+	}
+	var id int64
+	err := db.QueryRow(fmt.Sprintf("SELECT id FROM users WHERE username=%s", placeh(1)), username).Scan(&id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "用户不存在"})
+		return
+	}
+	_, err = db.Exec(fmt.Sprintf("UPDATE users SET password=%s WHERE id=%s", placeh(1), placeh(2)),
+		hashPassword(req.NewPassword), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "update failed"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// ─── Configurable categories ─────────────────────────────────────────────────
+
+// defaultCategories is the seeded sidebar category list (semantic genres).
+var defaultCategories = []string{"科幻", "推理", "冒险", "动作", "奇幻", "喜剧", "日常"}
+
+// getCategories returns the configured category list from settings,
+// falling back to defaults.
+func getCategories() []string {
+	if raw := getSetting("categories"); raw != "" {
+		var cats []string
+		if err := json.Unmarshal([]byte(raw), &cats); err == nil && len(cats) > 0 {
+			return cats
+		}
+	}
+	return defaultCategories
+}
+
+// adminGetCategories handles GET /api/categories (public to logged-in users).
+func adminGetCategories(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"categories": getCategories()})
+}
+
+// adminSetCategories handles PUT /api/categories (admin only).
+func adminSetCategories(c *gin.Context) {
+	var req struct {
+		Categories []string `json:"categories" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "categories required"})
+		return
+	}
+	cleaned := make([]string, 0, len(req.Categories))
+	seen := map[string]bool{}
+	for _, cat := range req.Categories {
+		cat = strings.TrimSpace(cat)
+		if cat == "" || seen[cat] {
+			continue
+		}
+		seen[cat] = true
+		cleaned = append(cleaned, cat)
+	}
+	b, _ := json.Marshal(cleaned)
+	if err := setSetting("categories", string(b)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "save failed"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"categories": cleaned})
 }
 
 // ─── Storage Source CRUD ──────────────────────────────────────────────────────
@@ -1316,9 +1533,9 @@ func seedAdmin() {
 		adminPass = "admin"
 	}
 	if dbDriver == "sqlite3" {
-		db.Exec("INSERT OR IGNORE INTO users(username,password,avatar) VALUES(?,?,?)", adminUser, hashPassword(adminPass), "")
+		db.Exec("INSERT OR IGNORE INTO users(username,password,avatar,role) VALUES(?,?,?,'admin')", adminUser, hashPassword(adminPass), "")
 	} else {
-		db.Exec("INSERT INTO users(username,password,avatar) VALUES($1,$2,$3) ON CONFLICT(username) DO NOTHING", adminUser, hashPassword(adminPass), "")
+		db.Exec("INSERT INTO users(username,password,avatar,role) VALUES($1,$2,$3,'admin') ON CONFLICT(username) DO NOTHING", adminUser, hashPassword(adminPass), "")
 	}
 	log.Println("Admin user created")
 }
@@ -1413,15 +1630,28 @@ func newRouter() *gin.Engine {
 	// API (authenticated) — all reads now require a valid JWT
 	api := r.Group("/api")
 	api.Use(authMiddleware())
+
+	// Change own password (any logged-in user)
+	api.PUT("/auth/password", changeOwnPassword)
 	api.GET("/xanimes", listAnimes)
 	api.GET("/xanimes/:id", getAnime)
 	api.GET("/xanimes/:id/episodes", listEpisodes)
 
-	// Current user + storage sources
+	// Current user + storage sources (writes are admin-only)
 	api.GET("/me", me)
 	api.GET("/storage-srcs", listSources)
-	api.POST("/storage-srcs", addSource)
-	api.DELETE("/storage-srcs/:id", deleteSource)
+	admin := api.Group("/admin", requireAdmin())
+	admin.POST("/storage-srcs", addSource)
+	admin.DELETE("/storage-srcs/:id", deleteSource)
+
+	// Admin user management
+	admin.GET("/users", adminListUsers)
+	admin.POST("/users/:username/password", adminResetUserPassword)
+	admin.DELETE("/users/:username", adminDeleteUser)
+
+	// Categories (semantic sidebar list; admin can edit)
+	api.GET("/categories", adminGetCategories)
+	admin.PUT("/categories", adminSetCategories)
 
 	// Library — real directory / file scanning (personal library).
 	// One catch-all route: /api/library/:src/*rest where rest is
