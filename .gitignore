@@ -1,0 +1,17 @@
+# 环境与密钥 — 永不入库
+.env
+*.db
+*.db-wal
+*.db-shm
+
+# 媒体数据 (挂载目录, 非代码)
+videos/
+static/
+data/
+
+# 构建产物
+frontend/dist/
+docker-compose.override.yml
+
+# 运行时
+*.log

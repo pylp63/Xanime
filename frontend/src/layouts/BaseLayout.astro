@@ -24,6 +24,18 @@ import '../styles/global.css';
         });
         setTimeout(function () { document.documentElement.classList.remove('pt-enter'); }, 500);
       }
+      // bfcache: 后退/前进恢复页面时清掉 exit 类, 否则页面停在 opacity:0 (空白)
+      window.addEventListener('pageshow', function (ev) {
+        if (ev.persisted) {
+          document.documentElement.classList.remove('pt-exit', 'pt-enter');
+        }
+      });
+      // 兜底: 任何时刻 exit 类残留超过 600ms 就清掉
+      setInterval(function () {
+        if (document.documentElement.classList.contains('pt-exit')) {
+          setTimeout(function () { document.documentElement.classList.remove('pt-exit'); }, 600);
+        }
+      }, 1000);
       // 退出动画 (点击站内链接)
       document.addEventListener('click', function (e) {
         if (reduce || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey) return;

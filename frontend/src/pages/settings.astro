@@ -227,6 +227,77 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       });
     }
 
+    // 液态玻璃确认弹窗 (替代原生 confirm)
+    function glassConfirm(message, opts) {
+      return new Promise(function (resolve) {
+        var overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(10,20,40,0.30);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .22s ease';
+        overlay.innerHTML =
+          '<div class="glass rounded-3xl p-6 w-full max-w-sm mx-4" style="transform:scale(.94);transition:transform .25s cubic-bezier(.22,1,.36,1)">' +
+            '<h3 class="text-base font-bold mb-2">请确认</h3>' +
+            '<p class="text-sm text-text-muted mb-5 leading-relaxed">' + message + '</p>' +
+            '<div class="flex gap-2 justify-end">' +
+              '<button class="btn-glass text-sm gc-cancel">取消</button>' +
+              '<button class="' + ((opts && opts.danger) ? 'btn-danger' : 'btn-liquid') + ' text-sm gc-ok">' + ((opts && opts.okText) || '确定') + '</button>' +
+            '</div>' +
+          '</div>';
+        document.body.appendChild(overlay);
+        requestAnimationFrame(function () {
+          overlay.style.opacity = '1';
+          overlay.querySelector('.glass').style.transform = 'scale(1)';
+        });
+        function close(val) {
+          overlay.style.opacity = '0';
+          overlay.querySelector('.glass').style.transform = 'scale(.94)';
+          setTimeout(function () { overlay.remove(); }, 220);
+          resolve(val);
+        }
+        overlay.querySelector('.gc-ok').addEventListener('click', function () { close(true); });
+        overlay.querySelector('.gc-cancel').addEventListener('click', function () { close(false); });
+        overlay.addEventListener('click', function (e) { if (e.target === overlay) close(false); });
+        document.addEventListener('keydown', function esc(e) {
+          if (e.key === 'Escape') { document.removeEventListener('keydown', esc); close(false); }
+        });
+      });
+    }
+
+    // 液态玻璃输入弹窗 (替代原生 prompt)
+    function glassPrompt(title, placeholder) {
+      return new Promise(function (resolve) {
+        var overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(10,20,40,0.30);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .22s ease';
+        overlay.innerHTML =
+          '<div class="glass rounded-3xl p-6 w-full max-w-sm mx-4" style="transform:scale(.94);transition:transform .25s cubic-bezier(.22,1,.36,1)">' +
+            '<h3 class="text-base font-bold mb-4">' + title + '</h3>' +
+            '<input type="text" class="glass-input gp-input" placeholder="' + (placeholder || '') + '" />' +
+            '<div class="flex gap-2 justify-end mt-5">' +
+              '<button class="btn-glass text-sm gp-cancel">取消</button>' +
+              '<button class="btn-liquid text-sm gp-ok">确定</button>' +
+            '</div>' +
+          '</div>';
+        document.body.appendChild(overlay);
+        var input = overlay.querySelector('.gp-input');
+        requestAnimationFrame(function () {
+          overlay.style.opacity = '1';
+          overlay.querySelector('.glass').style.transform = 'scale(1)';
+          input.focus();
+        });
+        function close(val) {
+          overlay.style.opacity = '0';
+          overlay.querySelector('.glass').style.transform = 'scale(.94)';
+          setTimeout(function () { overlay.remove(); }, 220);
+          resolve(val);
+        }
+        overlay.querySelector('.gp-ok').addEventListener('click', function () { close(input.value.trim()); });
+        overlay.querySelector('.gp-cancel').addEventListener('click', function () { close(null); });
+        overlay.addEventListener('click', function (e) { if (e.target === overlay) close(null); });
+        input.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') close(input.value.trim());
+          if (e.key === 'Escape') close(null);
+        });
+      });
+    }
+
     function toast(text, ok) {
       var t = document.createElement('div');
       t.className = 'toast ' + (ok ? 'ok' : 'err');
@@ -281,7 +352,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     function bindDelete() {
       document.querySelectorAll('.del-btn').forEach(function (btn) {
         btn.addEventListener('click', async function () {
-          if (!confirm('确定删除存储源「' + btn.getAttribute('data-name') + '」？已绑定该源的剧集将无法播放。')) return;
+          var okDel = await glassConfirm('确定删除存储源「' + btn.getAttribute('data-name') + '」？<br><span class="text-xs">已绑定该源的剧集将无法播放。</span>', { danger: true, okText: '删除' });
+          if (!okDel) return;
           btn.disabled = true;
           try {
             var res = await fetch('/api/admin/storage-srcs/' + encodeURIComponent(btn.getAttribute('data-id')), {
@@ -392,8 +464,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         el.querySelectorAll('.reset-btn').forEach(function (btn) {
           btn.addEventListener('click', async function () {
             var user = btn.getAttribute('data-user');
-            var np = prompt('为用户「' + user + '」设置新密码（至少 6 位）:');
-            if (!np) return;
+            var np = await glassPrompt('为用户「' + user + '」设置新密码', '至少 6 位');
+            if (np === null) return;
             if (np.length < 6) { toast('密码至少 6 位', false); return; }
             try {
               var res = await fetch('/api/admin/users/' + encodeURIComponent(user) + '/password', {
@@ -409,7 +481,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         el.querySelectorAll('.del-user-btn').forEach(function (btn) {
           btn.addEventListener('click', async function () {
             var user = btn.getAttribute('data-user');
-            if (!confirm('确定删除用户「' + user + '」？该账号将无法登录。')) return;
+            var okU = await glassConfirm('确定删除用户「' + user + '」？<br><span class="text-xs">该账号将无法登录。</span>', { danger: true, okText: '删除' });
+            if (!okU) return;
             btn.disabled = true;
             try {
               var res = await fetch('/api/admin/users/' + encodeURIComponent(user), {
@@ -433,7 +506,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
     async function saveCats() {
       try {
-        var res = await fetch('/api/categories', {
+        var res = await fetch('/api/admin/categories', {
           method: 'PUT', credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ categories: cats })
@@ -468,12 +541,13 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         btn.addEventListener('click', async function () {
           var idx = parseInt(btn.getAttribute('data-idx'), 10);
           var name = cats[idx];
-          if (!confirm('删除分类「' + name + '」？')) return;
+          var okDel = await glassConfirm('删除分类「' + name + '」？', { danger: true, okText: '删除' });
+          if (!okDel) return;
           cats.splice(idx, 1);
           if (await saveCats()) { toast('已删除「' + name + '」', true); renderCats(); }
         });
       });
-      // 上移/下移
+      // 上移/下移 — 带 FLIP 换位动画, 让变化看得见
       catListEl.querySelectorAll('.cat-up, .cat-down').forEach(function (btn) {
         btn.addEventListener('click', async function () {
           var idx = parseInt(btn.getAttribute('data-idx'), 10);
@@ -481,7 +555,27 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           var j = idx + dir;
           if (j < 0 || j >= cats.length) return;
           var tmp = cats[idx]; cats[idx] = cats[j]; cats[j] = tmp;
-          if (await saveCats()) renderCats();
+          if (!(await saveCats())) return;
+          // FLIP: 记录旧行位置 → 重渲染 → 新位置反向位移 → 过渡回 0
+          var before = new Map();
+          catListEl.querySelectorAll('.cat-row').forEach(function (row) {
+            before.set(row.querySelector('.cat-label').textContent, row.getBoundingClientRect().top);
+          });
+          renderCats();
+          catListEl.querySelectorAll('.cat-row').forEach(function (row) {
+            var label = row.querySelector('.cat-label').textContent;
+            var oldTop = before.get(label);
+            if (oldTop === undefined) return;
+            var delta = oldTop - row.getBoundingClientRect().top;
+            if (Math.abs(delta) < 1) return;
+            row.animate(
+              [
+                { transform: 'translateY(' + delta + 'px)' },
+                { transform: 'translateY(0)' }
+              ],
+              { duration: 300, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }
+            );
+          });
         });
       });
       // 拖拽排序
