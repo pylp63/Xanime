@@ -48,7 +48,6 @@ const category = Astro.url.searchParams.get('category') || '';
           {!search && !category && (
             <div class="mb-8 text-center md:text-left">
               <h1 class="text-3xl md:text-4xl font-bold mb-3">探索新世界 • <span class="brand-text">X动漫</span></h1>
-              <p class="text-text-muted max-w-xl">个人媒体库 · 实时扫描存储源目录</p>
             </div>
           )}
           {(search || category) && (
