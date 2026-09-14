@@ -110,8 +110,8 @@ body {
 .glass {
   position: relative;
   background: var(--glass-bg);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  backdrop-filter: blur(18px) saturate(160%);
   border: 1px solid var(--glass-border);
   border-radius: 24px;
   box-shadow:
@@ -137,8 +137,8 @@ body {
 .glass-input {
   width: 100%;
   background: rgba(255, 255, 255, 0.24);
-  -webkit-backdrop-filter: blur(16px) saturate(150%);
-  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
   border: 1px solid rgba(16, 24, 40, 0.10);
   border-radius: 16px;
   padding: 0.65rem 1rem;
@@ -199,8 +199,8 @@ body {
 /* 次级按钮 — 白玻璃胶囊 */
 .btn-glass {
   background: rgba(255, 255, 255, 0.35);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
-  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  backdrop-filter: blur(14px) saturate(150%);
   border: 1px solid rgba(16, 24, 40, 0.10);
   color: var(--text);
   border-radius: 16px;
@@ -261,8 +261,8 @@ body {
 /* 悬浮玻璃导航 */
 .glass-nav {
   background: var(--nav-bg);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
-  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  backdrop-filter: blur(14px) saturate(150%);
   border-bottom: 1px solid rgba(16, 24, 40, 0.07);
   box-shadow: 0 4px 24px rgba(30, 60, 120, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
@@ -271,8 +271,8 @@ body {
 .xanime-card {
   position: relative;
   background: var(--glass-bg);
-  -webkit-backdrop-filter: blur(20px) saturate(170%);
-  backdrop-filter: blur(20px) saturate(170%);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  backdrop-filter: blur(14px) saturate(150%);
   border: 1px solid var(--glass-border);
   border-radius: 22px;
   overflow: hidden;
@@ -294,8 +294,8 @@ body {
 /* 封面上的徽章 — 深色半透明保证图片上可读 */
 .glass-chip {
   background: rgba(16, 24, 40, 0.45);
-  -webkit-backdrop-filter: blur(14px) saturate(150%);
-  backdrop-filter: blur(14px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  backdrop-filter: blur(12px) saturate(140%);
   border: 1px solid rgba(255, 255, 255, 0.30);
   color: #fff;
 }
@@ -319,8 +319,8 @@ body {
 /* 分类筛选胶囊 */
 .filter-pill {
   background: rgba(255, 255, 255, 0.28);
-  -webkit-backdrop-filter: blur(16px) saturate(150%);
-  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
   border: 1px solid transparent;
   color: var(--text-muted);
   border-radius: 999px;
@@ -349,8 +349,8 @@ body {
   border: 1px solid rgba(16, 24, 40, 0.08);
   color: var(--text);
   border-radius: 14px;
-  -webkit-backdrop-filter: blur(14px) saturate(150%);
-  backdrop-filter: blur(14px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  backdrop-filter: blur(12px) saturate(140%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
 }
 .episode-btn:hover {
@@ -407,8 +407,8 @@ body {
   top: 84px; right: 24px;
   z-index: 100;
   background: rgba(255, 255, 255, 0.5);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  backdrop-filter: blur(14px) saturate(150%);
   border: 1px solid var(--glass-border);
   border-radius: 18px;
   padding: 0.85rem 1.25rem;
@@ -434,7 +434,7 @@ body {
 .aurora-blob {
   position: absolute;
   border-radius: 50%;
-  filter: blur(80px);
+  filter: blur(60px);
   pointer-events: none;
   animation: blobDrift 16s ease-in-out infinite alternate;
 }
@@ -465,12 +465,12 @@ body {
   to   { opacity: 0; transform: scale(0.92); filter: blur(6px); }
 }
 @keyframes pageEnter {
-  from { opacity: 0; transform: scale(1.05); filter: blur(6px); }
-  to   { opacity: 1; transform: scale(1); filter: blur(0); }
+  from { opacity: 0; transform: scale(1.04); }
+  to   { opacity: 1; transform: scale(1); }
 }
 @keyframes softEnter {
-  from { opacity: 0; transform: translateY(14px) scale(0.985); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 /* 整页容器动画 (body 级) */

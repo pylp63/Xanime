@@ -52,35 +52,38 @@ function withTransition(renderFn) {
   var main = document.querySelector('#app main');
   if (!main || typeof main.animate !== 'function') { renderFn(); return; }
   // exit: 由近到远
+  main.style.willChange = 'transform, opacity';
   main.animate(
     [
-      { opacity: 1, transform: 'scale(1)', filter: 'blur(0px)' },
-      { opacity: 0, transform: 'scale(0.92)', filter: 'blur(6px)' }
+      { opacity: 1, transform: 'scale(1)' },
+      { opacity: 0, transform: 'scale(0.96)' }
     ],
-    { duration: 220, easing: 'cubic-bezier(0.4, 0, 0.2, 1)', fill: 'forwards' }
+    { duration: 200, easing: 'cubic-bezier(0.4, 0, 0.2, 1)', fill: 'forwards' }
   ).onfinish = function () {
     Promise.resolve(renderFn()).then(function () {
       var fresh = document.querySelector('#app main');
       if (!fresh) return;
-      // enter: 由远到近
-      fresh.animate(
-        [
-          { opacity: 0, transform: 'scale(1.05)', filter: 'blur(6px)' },
-          { opacity: 1, transform: 'scale(1)', filter: 'blur(0px)' }
-        ],
-        { duration: 320, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'both' }
-      );
-      // 剧集网格错峰进入
-      var grids = fresh.querySelectorAll('.grid');
-      grids.forEach(function (g) {
-        Array.from(g.children).forEach(function (child, i) {
-          child.animate(
-            [
-              { opacity: 0, transform: 'translateY(14px) scale(0.96)' },
-              { opacity: 1, transform: 'translateY(0) scale(1)' }
-            ],
-            { duration: 380, delay: Math.min(i * 28, 400), easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'both' }
-          );
+      // enter: 由远到近 (纯 transform+opacity, GPU 合成)
+            fresh.style.willChange = 'transform, opacity';
+            fresh.animate(
+              [
+                { opacity: 0, transform: 'scale(1.04)' },
+                { opacity: 1, transform: 'scale(1)' }
+              ],
+              { duration: 260, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'both' }
+            );
+            // 剧集网格错峰进入
+            var grids = fresh.querySelectorAll('.grid');
+            grids.forEach(function (g) {
+              Array.from(g.children).forEach(function (child, i) {
+                child.style.willChange = 'transform, opacity';
+                child.animate(
+                  [
+                    { opacity: 0, transform: 'translateY(12px)' },
+                    { opacity: 1, transform: 'translateY(0)' }
+                  ],
+                  { duration: 280, delay: Math.min(i * 22, 300), easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'both' }
+                );
         });
       });
     });
