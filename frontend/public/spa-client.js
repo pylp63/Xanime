@@ -51,43 +51,49 @@ if (app) {
 function withTransition(renderFn) {
   var main = document.querySelector('#app main');
   if (!main || typeof main.animate !== 'function') { renderFn(); return; }
-  // exit: 由近到远
-  main.style.willChange = 'transform, opacity';
-  main.animate(
+
+  // exit 动画与内容渲染并行: 一边播放退出动画, 一边在后台 fetch+渲染新内容,
+  // 避免"退出动画播完 → 等 fetch → 再进入动画"的串行停顿。
+  var exitAnim = main.animate(
     [
       { opacity: 1, transform: 'scale(1)' },
       { opacity: 0, transform: 'scale(0.96)' }
     ],
-    { duration: 200, easing: 'cubic-bezier(0.4, 0, 0.2, 1)', fill: 'forwards' }
-  ).onfinish = function () {
-    Promise.resolve(renderFn()).then(function () {
-      var fresh = document.querySelector('#app main');
-      if (!fresh) return;
-      // enter: 由远到近 (纯 transform+opacity, GPU 合成)
-            fresh.style.willChange = 'transform, opacity';
-            fresh.animate(
-              [
-                { opacity: 0, transform: 'scale(1.04)' },
-                { opacity: 1, transform: 'scale(1)' }
-              ],
-              { duration: 260, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'both' }
-            );
-            // 剧集网格错峰进入
-            var grids = fresh.querySelectorAll('.grid');
-            grids.forEach(function (g) {
-              Array.from(g.children).forEach(function (child, i) {
-                child.style.willChange = 'transform, opacity';
-                child.animate(
-                  [
-                    { opacity: 0, transform: 'translateY(12px)' },
-                    { opacity: 1, transform: 'translateY(0)' }
-                  ],
-                  { duration: 280, delay: Math.min(i * 22, 300), easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'both' }
-                );
-        });
+    { duration: 190, easing: 'cubic-bezier(0.4, 0, 0.2, 1)' }
+  );
+
+  Promise.all([
+    new Promise(function (res) { exitAnim.onfinish = res; }),
+    Promise.resolve(renderFn())
+  ]).then(function () {
+    var fresh = document.querySelector('#app main');
+    if (!fresh) return;
+    // enter: 由远到近 (纯 transform+opacity, GPU 合成, 结束后清理 willChange)
+    fresh.style.opacity = '0';
+    fresh.style.willChange = 'transform, opacity';
+    var enterAnim = fresh.animate(
+      [
+        { opacity: 0, transform: 'scale(1.04)' },
+        { opacity: 1, transform: 'scale(1)' }
+      ],
+      { duration: 240, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }
+    );
+    enterAnim.onfinish = function () { fresh.style.willChange = 'auto'; fresh.style.opacity = ''; };
+
+    // 剧集网格错峰进入
+    var grids = fresh.querySelectorAll('.grid');
+    grids.forEach(function (g) {
+      Array.from(g.children).forEach(function (child, i) {
+        child.animate(
+          [
+            { opacity: 0, transform: 'translateY(10px)' },
+            { opacity: 1, transform: 'translateY(0)' }
+          ],
+          { duration: 240, delay: Math.min(i * 18, 260), easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }
+        );
       });
     });
-  };
+  });
 }
 
 function esc(s) {
@@ -106,6 +112,20 @@ async function fetchJSON(url) {
   return res.json();
 }
 
+// library 数据缓存: 首页/详情/播放页共享同一份目录扫描结果,
+// 避免每次 SPA 切换都重新全量扫描 (scanSourceDir 是实时遍历文件的)。
+var libraryCache = { promise: null, at: 0 };
+var LIBRARY_TTL = 2000; // 2s 内复用, 足够一次浏览会话内的连续切换
+function getLibrary() {
+  var now = Date.now();
+  if (libraryCache.promise && (now - libraryCache.at) < LIBRARY_TTL) {
+    return libraryCache.promise;
+  }
+  libraryCache.at = now;
+  libraryCache.promise = fetchJSON('/api/library');
+  return libraryCache.promise;
+}
+
 async function presignURL(key) {
   try {
     const data = await fetchJSON('/api/files/presign?key=' + encodeURIComponent(key));
@@ -122,9 +142,12 @@ function fmtSize(bytes) {
 }
 
 async function renderDetail(srcID, name) {
-  // Library detail: episodes come from real files in the anime directory
-  const eps = await fetchJSON('/api/library/' + encodeURIComponent(srcID) + '/' + encodeURIComponent(name) + '/episodes');
-  const lib = await fetchJSON('/api/library');
+  // Library detail: episodes come from real files in the anime directory.
+  // 并行请求 episodes + library(带缓存), 不再串行等待两次网络往返。
+  const [eps, lib] = await Promise.all([
+    fetchJSON('/api/library/' + encodeURIComponent(srcID) + '/' + encodeURIComponent(name) + '/episodes'),
+    getLibrary()
+  ]);
   const meta = lib && (lib.data || []).find(function (a) { return a.name === name && a.source_id === srcID; });
   const title = (meta && meta.title) || name.split('/').pop();
 
@@ -162,8 +185,10 @@ async function renderDetail(srcID, name) {
 }
 
 async function renderWatch(srcID, name, file) {
-  const eps = await fetchJSON('/api/library/' + encodeURIComponent(srcID) + '/' + encodeURIComponent(name) + '/episodes');
-  const lib = await fetchJSON('/api/library');
+  const [eps, lib] = await Promise.all([
+    fetchJSON('/api/library/' + encodeURIComponent(srcID) + '/' + encodeURIComponent(name) + '/episodes'),
+    getLibrary()
+  ]);
   const meta = lib && (lib.data || []).find(function (a) { return a.name === name && a.source_id === srcID; });
   const title = (meta && meta.title) || name.split('/').pop();
 
