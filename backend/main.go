@@ -771,6 +771,22 @@ func countVideos(dir string) (int, string, string) {
 // WITHOUT videos but WITH anime subdirectories (a symlinked collection, e.g.
 // "ln -s /mnt/nfs /data/Xanime/NFS媒体库") is recursed one level: its animes
 // are exposed as "Collection/AnimeName" so files stream from the right path.
+// matchCategory 返回 baseRel 路径各段中第一个命中配置分类名的分类，否则空串。
+// 这样只有"科幻/动作"等语义分类会被识别，目录结构名(网络存储NFS/NFS挂载点/localmedia)不会污染侧边栏分类。
+func matchCategory(baseRel string) string {
+	for _, cat := range getCategories() {
+		if cat == "" {
+			continue
+		}
+		for _, seg := range strings.Split(baseRel, "/") {
+			if seg == cat {
+				return cat
+			}
+		}
+	}
+	return ""
+}
+
 func scanSourceDir(src *StorageSource) []LibraryAnime {
 	var out []LibraryAnime
 	var walk func(baseRel string, depth int)
@@ -795,11 +811,13 @@ func scanSourceDir(src *StorageSource) []LibraryAnime {
 					cover = fmt.Sprintf("/api/library/%s/%s/cover", src.ID, relName)
 				}
 				title := e.Name()
-				category := ""
-				if baseRel != "" {
-					title = e.Name()
-					category = baseRel
-				}
+							category := ""
+							if baseRel != "" {
+								title = e.Name()
+								// 分类只能是配置的语义分类之一(科幻/动作...)，取 baseRel 各段中第一个命中的分类名；
+								// 若非分类(如 NFS挂载点/localmedia)则留空，归入未分类，避免目录名污染侧边栏。
+								category = matchCategory(baseRel)
+							}
 				out = append(out, LibraryAnime{
 					Name: relName, Title: title, Category: category,
 					SourceID: src.ID, SourceName: src.Name,

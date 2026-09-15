@@ -619,8 +619,9 @@ func TestLibraryFollowsSymlinksAndCollections(t *testing.T) {
 	if frieren.Title != "葬送的芙莉莲" {
 		t.Fatalf("nested anime title should drop prefix, got %q", frieren.Title)
 	}
-	if frieren.Category != "NFS媒体库" {
-		t.Fatalf("nested anime category should be parent dir, got %q", frieren.Category)
+	// 目录结构名(如 NFS媒体库) 不属于配置的语义分类，category 应为空(未分类)
+	if frieren.Category != "" {
+		t.Fatalf("nested anime under non-category dir should have empty category, got %q", frieren.Category)
 	}
 	if giant.Title != "进击的巨人" || giant.Category != "" {
 		t.Fatalf("top-level anime title/category wrong: %+v", giant)

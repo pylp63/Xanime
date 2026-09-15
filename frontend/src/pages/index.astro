@@ -73,7 +73,7 @@ const category = Astro.url.searchParams.get('category') || '';
     const grid = document.getElementById('grid');
     const catsNav = document.getElementById('sidebar-cats');
     let userRole = 'user';
-    fetch('/api/me', { credentials: 'same-origin' })
+    const rolePromise = fetch('/api/me', { credentials: 'same-origin' })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (me) { if (me && me.role) userRole = me.role; })
       .catch(function () {});
@@ -110,6 +110,7 @@ const category = Astro.url.searchParams.get('category') || '';
     }
 
     async function load() {
+      await rolePromise;
       const params = new URLSearchParams();
       if (search) params.set('search', search);
       if (activeCategory) params.set('category', activeCategory);
@@ -163,7 +164,7 @@ const category = Astro.url.searchParams.get('category') || '';
             '<div class="flex items-center gap-2 mt-1.5">' +
               (a.year ? '<span class="text-xs text-text-muted">' + a.year + '</span><span class="w-1 h-1 bg-text-muted rounded-full"></span>' : '') +
               (a.category ? '<span class="tag-chip truncate max-w-[110px]">' + esc(a.category) + '</span>' : '') +
-              '<span class="text-xs text-text-muted truncate max-w-[90px] ml-auto">' + esc(a.source_name) + '</span>' +
+              (userRole === 'admin' ? '<span class="text-xs text-text-muted truncate max-w-[90px] ml-auto">' + esc(a.source_name) + '</span>' : '') +
             '</div>' +
           '</div>' +
         '</a>';
