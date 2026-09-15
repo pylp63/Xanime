@@ -1302,7 +1302,15 @@ func addSource(c *gin.Context) {
 	}
 	req.ID = fmt.Sprintf("%s-%d", req.Type, time.Now().UnixNano())
 	if req.Name == "" {
-		req.Name = req.Type
+		// 默认名: 取 video_path 最后一段(子目录名) — /data/Xanime/localmedia -> localmedia
+		if req.VideoPath != "" {
+			if base := filepath.Base(filepath.Clean(req.VideoPath)); base != "" && base != "." && base != "/" {
+				req.Name = base
+			}
+		}
+		if req.Name == "" {
+			req.Name = req.Type
+		}
 	}
 	storageSources = append(storageSources, req)
 	if err := saveStorageSources(); err != nil {

@@ -72,33 +72,38 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
                 <div>
                   <label class="block text-sm font-medium mb-1.5">类型</label>
-                  <div id="type-cards" class="grid grid-cols-3 gap-3">
-                    <button type="button" data-type="local" class="type-card glass rounded-2xl p-3 text-left transition-all" data-selected="true">
-                      <div class="text-2xl mb-1">💾</div>
-                      <div class="text-sm font-semibold">本地磁盘</div>
-                      <div class="text-xs text-text-muted mt-0.5">服务器本地目录</div>
-                    </button>
-                    <button type="button" data-type="nfs" class="type-card glass rounded-2xl p-3 text-left transition-all" data-selected="false">
-                      <div class="text-2xl mb-1">🖧</div>
-                      <div class="text-sm font-semibold">NFS / NAS</div>
-                      <div class="text-xs text-text-muted mt-0.5">网络挂载目录</div>
-                    </button>
-                    <button type="button" data-type="s3" class="type-card glass rounded-2xl p-3 text-left transition-all" data-selected="false">
-                      <div class="text-2xl mb-1">☁️</div>
-                      <div class="text-sm font-semibold">S3 对象存储</div>
-                      <div class="text-xs text-text-muted mt-0.5">MinIO / OBS / AWS</div>
-                    </button>
-                  </div>
+                                    <div id="type-cards" class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                      <button type="button" data-type="local" class="type-card glass rounded-2xl p-3 text-left transition-all" data-selected="true">
+                                        <div class="text-2xl mb-1">💾</div>
+                                        <div class="text-sm font-semibold">本地磁盘</div>
+                                        <div class="text-xs text-text-muted mt-0.5">服务器本地目录</div>
+                                      </button>
+                                      <button type="button" data-type="nfs" class="type-card glass rounded-2xl p-3 text-left transition-all" data-selected="false">
+                                        <div class="text-2xl mb-1">🖧</div>
+                                        <div class="text-sm font-semibold">NFS</div>
+                                        <div class="text-xs text-text-muted mt-0.5">网络存储 · NFS</div>
+                                      </button>
+                                      <button type="button" data-type="nas" class="type-card glass rounded-2xl p-3 text-left transition-all" data-selected="false">
+                                        <div class="text-2xl mb-1">🗄️</div>
+                                        <div class="text-sm font-semibold">NAS</div>
+                                        <div class="text-xs text-text-muted mt-0.5">网络存储 · NAS</div>
+                                      </button>
+                                      <button type="button" data-type="s3" class="type-card glass rounded-2xl p-3 text-left transition-all" data-selected="false">
+                                        <div class="text-2xl mb-1">☁️</div>
+                                        <div class="text-sm font-semibold">S3 对象存储</div>
+                                        <div class="text-xs text-text-muted mt-0.5">MinIO / OBS / AWS</div>
+                                      </button>
+                                    </div>
                 </div>
 
                 <!-- Filesystem fields -->
                 <div id="fs-fields" class="space-y-4">
                   <div>
                     <label class="block text-sm font-medium mb-1.5">视频目录路径</label>
-                    <input id="video-path" type="text" placeholder="/data/Xanime 或 /app/videos" class="glass-input" />
+                    <input id="video-path" type="text" placeholder="/data/Xanime/localmedia 或 /data/Xanime/NFS" class="glass-input" />
                     <div class="text-xs text-text-muted mt-1.5 leading-relaxed">
-                      <p>推荐方案：容器已挂载宿主机 <code class="text-[color:var(--accent)]">/data/Xanime</code>（可写）和 <code class="text-[color:var(--accent)]">/mnt</code>（NFS/NAS 挂载区）。</p>
-                      <p class="mt-1">新存储无需改配置 — 宿主机上把目录软链进来即可：<code class="text-[color:var(--accent)]">ln -s /mnt/我的NFS /data/Xanime/NFS媒体库</code></p>
+                      <p>填写 <code class="text-[color:var(--accent)]">/data/Xanime</code> 下的子目录，前端只显示子目录名。</p>
+                      <p class="mt-1">本地磁盘填 <code class="text-[color:var(--accent)]">/data/Xanime/localmedia</code>；NFS 填 <code class="text-[color:var(--accent)]">/data/Xanime/NFS</code>（宿主机已挂载到 /mnt/nfs 再 ln -s 软链进来）；NAS 同理。</p>
                     </div>
                   </div>
                 </div>
@@ -314,7 +319,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     }
 
     function typeLabel(type) {
-      return { local: '本地', nfs: 'NFS/NAS', nas: 'NFS/NAS', s3: 'S3' }[type] || type;
+      return { local: '本地磁盘', nfs: '网络存储 NFS', nas: '网络存储 NAS', s3: 'S3 对象存储' }[type] || type;
     }
 
     function selectType(type) {
